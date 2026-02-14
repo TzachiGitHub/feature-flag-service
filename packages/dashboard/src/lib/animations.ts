@@ -1,4 +1,7 @@
 // Shared framer-motion animation configs
+
+const easeOut: [number, number, number, number] = [0.16, 1, 0.3, 1];
+
 export const fadeIn = {
   initial: { opacity: 0 },
   animate: { opacity: 1 },
@@ -52,19 +55,19 @@ export const modalContent = {
   initial: { opacity: 0, scale: 0.95, y: 8 },
   animate: { opacity: 1, scale: 1, y: 0 },
   exit: { opacity: 0, scale: 0.95, y: 8 },
-  transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] as const },
+  transition: { duration: 0.2, ease: easeOut },
 };
 
 export const slideUpFromBottom = {
   initial: { opacity: 0, y: 20 },
   animate: { opacity: 1, y: 0 },
   exit: { opacity: 0, y: 20 },
-  transition: { duration: 0.25, ease: [0.16, 1, 0.3, 1] as const },
+  transition: { duration: 0.25, ease: easeOut },
 };
 
 export const toastAnimation = {
   initial: { opacity: 0, x: 80 },
   animate: { opacity: 1, x: 0 },
   exit: { opacity: 0, x: 80 },
-  transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as const },
+  transition: { duration: 0.3, ease: easeOut },
 };
