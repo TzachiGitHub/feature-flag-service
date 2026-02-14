@@ -69,7 +69,7 @@ function ShopContent() {
   );
 }
 
-const SDK_KEY = 'test-sdk-key-1';
+const SDK_KEY = 'fef9570c-a134-44b8-9402-e88ac1a7ba4f';
 
 export default function App() {
   return (

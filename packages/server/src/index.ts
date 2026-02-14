@@ -1,6 +1,11 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { errorHandler } from './middleware/errorHandler.js';
 import { authenticate as authMiddleware } from './middleware/auth.js';
 import { sdkAuthMiddleware } from './middleware/sdkAuth.js';
@@ -48,6 +53,21 @@ app.use('/api/sdk', sdkAuthMiddleware, sdkRoutes);
 app.use('/api/projects/:projectKey/analytics', authMiddleware, analyticsRoutes);
 
 app.use(errorHandler);
+
+// --- Serve static frontends in production ---
+// Test app at /shop
+const testAppPath = path.join(__dirname, '../../../test-app/dist');
+app.use('/shop', express.static(testAppPath));
+app.get('/shop/*', (_req, res) => res.sendFile(path.join(testAppPath, 'index.html')));
+
+// Dashboard (catch-all, must be LAST)
+const dashboardPath = path.join(__dirname, '../../dashboard/dist');
+app.use(express.static(dashboardPath));
+app.get('*', (_req, res, next) => {
+  // Don't catch API routes
+  if (_req.path.startsWith('/api')) return next();
+  res.sendFile(path.join(dashboardPath, 'index.html'));
+});
 
 app.listen(PORT, () => {
   console.log(`🚀 Feature Flag Server running on port ${PORT}`);

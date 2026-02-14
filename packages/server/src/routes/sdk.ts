@@ -61,7 +61,6 @@ router.get('/flags', async (req: Request, res: Response) => {
         };
       } else {
         // With context — evaluate server-side
-        // Simple evaluation: if flag is off, return off variation; if on, return fallthrough
         let value: any;
         let variationId: string | null = null;
         let reason = 'FALLTHROUGH';
@@ -70,9 +69,67 @@ router.get('/flags', async (req: Request, res: Response) => {
           reason = 'OFF';
           variationId = config.offVariationId ?? null;
         } else {
-          const ft = config.fallthrough as any;
-          variationId = ft?.variationId ?? (variations.length > 0 ? variations[0]?.id : null);
-          reason = 'FALLTHROUGH';
+          // 1. Check individual targets
+          const targets = (config.targets as any[]) || [];
+          let matched = false;
+          for (const target of targets) {
+            if (target.values && target.values.includes(context.key)) {
+              variationId = target.variationId;
+              reason = 'TARGET_MATCH';
+              matched = true;
+              break;
+            }
+          }
+
+          // 2. Check rules
+          if (!matched) {
+            const rules = (config.rules as any[]) || [];
+            for (const rule of rules) {
+              const clauses = rule.clauses || [];
+              const allMatch = clauses.every((clause: any) => {
+                const attrValue = context.attributes?.[clause.attribute] ?? (context as any)[clause.attribute];
+                if (clause.op === 'in') {
+                  return clause.values?.includes(attrValue);
+                } else if (clause.op === 'eq') {
+                  return clause.values?.includes(attrValue);
+                } else if (clause.op === 'contains') {
+                  return typeof attrValue === 'string' && clause.values?.some((v: string) => attrValue.includes(v));
+                }
+                return false;
+              });
+              if (allMatch && clauses.length > 0) {
+                variationId = rule.variationId;
+                reason = 'RULE_MATCH';
+                matched = true;
+                break;
+              }
+            }
+          }
+
+          // 3. Fallthrough
+          if (!matched) {
+            const ft = config.fallthrough as any;
+            if (ft?.rollout) {
+              // Percentage rollout — hash context key
+              const hash = Array.from(context.key || 'anonymous').reduce((h: number, c: string) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
+              const bucket = Math.abs(hash) % 100000;
+              let cumulative = 0;
+              for (const rv of ft.rollout.variations || []) {
+                cumulative += rv.weight;
+                if (bucket < cumulative) {
+                  variationId = rv.variationId;
+                  break;
+                }
+              }
+              if (!variationId && ft.rollout.variations?.length > 0) {
+                variationId = ft.rollout.variations[ft.rollout.variations.length - 1].variationId;
+              }
+              reason = 'ROLLOUT';
+            } else {
+              variationId = ft?.variationId ?? (variations.length > 0 ? variations[0]?.id : null);
+              reason = 'FALLTHROUGH';
+            }
+          }
         }
 
         if (variationId && variations.length > 0) {
