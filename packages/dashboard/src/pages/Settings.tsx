@@ -56,11 +56,7 @@ export default function Settings() {
   useEffect(() => {
     api.get(`/projects/${projectKey}/environments`)
       .then(r => setEnvs(r.data?.environments || r.data || []))
-      .catch(() => setEnvs([
-        { key: 'production', name: 'Production', color: '#f43f5e', sdkKey: 'sdk-prod-abc123xyz' },
-        { key: 'staging', name: 'Staging', color: '#f59e0b', sdkKey: 'sdk-stg-def456uvw' },
-        { key: 'development', name: 'Development', color: '#10b981', sdkKey: 'sdk-dev-ghi789rst' },
-      ]));
+      .catch(() => { setEnvs([]); toast('error', 'Failed to load environments'); });
   }, []);
 
   const maskKey = (key: string) => {

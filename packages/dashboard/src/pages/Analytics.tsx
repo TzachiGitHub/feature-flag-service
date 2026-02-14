@@ -148,6 +148,7 @@ export default function Analytics() {
   const projectKey = currentProject?.key ?? '';
 
   useEffect(() => {
+    if (!projectKey) return;
     setLoading(true);
     const params: any = { period };
     if (flagFilter) params.flagKey = flagFilter;
@@ -155,9 +156,10 @@ export default function Analytics() {
       .then(r => setData(r.data))
       .catch(() => setData({ totalEvaluations: 0, uniqueContexts: 0, activeFlags: 0, buckets: [] }))
       .finally(() => setLoading(false));
-  }, [period, flagFilter]);
+  }, [period, flagFilter, projectKey]);
 
   useEffect(() => {
+    if (!projectKey) return;
     if (flagFilter) {
       api.get(`/projects/${projectKey}/analytics/evaluations/${flagFilter}/breakdown`)
         .then(r => setBreakdown(r.data))
@@ -165,13 +167,14 @@ export default function Analytics() {
     } else {
       setBreakdown(null);
     }
-  }, [flagFilter]);
+  }, [flagFilter, projectKey]);
 
   useEffect(() => {
+    if (!projectKey) return;
     api.get(`/projects/${projectKey}/analytics/stale-flags`, { params: { days: 7 } })
       .then(r => setStaleFlags(r.data?.flags || []))
       .catch(() => setStaleFlags([]));
-  }, []);
+  }, [projectKey]);
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">

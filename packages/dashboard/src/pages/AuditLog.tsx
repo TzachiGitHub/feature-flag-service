@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/client';
 import AuditDiff from '../components/AuditDiff';
+import { useProjectStore } from '../stores/projectStore';
 
 interface AuditEntry {
   id: string;
@@ -8,7 +9,7 @@ interface AuditEntry {
   flagKey: string;
   userName: string;
   userId: string;
-  timestamp: string;
+  createdAt: string;
   before?: any;
   after?: any;
 }
@@ -51,9 +52,11 @@ export default function AuditLog() {
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const limit = 20;
-  const projectKey = 'default';
+  const { currentProject } = useProjectStore();
+  const projectKey = currentProject?.key ?? '';
 
   const fetchEntries = (reset = false) => {
+    if (!projectKey) return;
     const newOffset = reset ? 0 : offset;
     setLoading(true);
     const params: any = { limit, offset: newOffset };
@@ -81,7 +84,7 @@ export default function AuditLog() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchEntries(true); }, []);
+  useEffect(() => { fetchEntries(true); }, [projectKey]);
 
   const handleApply = () => {
     setOffset(0);
@@ -142,8 +145,8 @@ export default function AuditLog() {
                     <span className="text-slate-400">{entry.action}</span>{' '}
                     <code className="text-indigo-400 bg-slate-900 px-1.5 py-0.5 rounded text-xs">{entry.flagKey}</code>
                   </div>
-                  <div className="text-xs text-slate-500 mt-1" title={new Date(entry.timestamp).toLocaleString()}>
-                    {relativeTime(entry.timestamp)}
+                  <div className="text-xs text-slate-500 mt-1" title={new Date(entry.createdAt).toLocaleString()}>
+                    {relativeTime(entry.createdAt)}
                   </div>
                 </div>
               </div>

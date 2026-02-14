@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import api from '../api/client';
+import { useProjectStore } from '../stores/projectStore';
 
 const PRESETS: Record<string, object> = {
   'Free User': { kind: 'user', key: 'user-free-01', name: 'Alex Free', attributes: { email: 'alex@example.com', country: 'US', plan: 'free' } },
@@ -42,11 +43,13 @@ export default function Playground() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedFlag, setSelectedFlag] = useState<string | null>(null);
-  const projectKey = 'default';
+  const { currentProject } = useProjectStore();
+  const projectKey = currentProject?.key ?? '';
 
   const handleEvaluate = async () => {
     setError('');
     setSelectedFlag(null);
+    if (!projectKey) { setError('No project selected'); return; }
     try {
       const context = JSON.parse(contextStr);
       setLoading(true);

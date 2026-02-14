@@ -66,8 +66,9 @@ export function FlagProvider({
         const data = await res.json();
         const newFlags: Record<string, unknown> = {};
         const newDetails: Record<string, FlagDetail> = {};
-        if (data && typeof data === 'object') {
-          for (const [key, val] of Object.entries(data as Record<string, unknown>)) {
+        const flagsData = (data as any).flags || data;
+        if (flagsData && typeof flagsData === 'object') {
+          for (const [key, val] of Object.entries(flagsData as Record<string, unknown>)) {
             const v = val as Record<string, unknown> | undefined;
             if (v && typeof v === 'object' && 'value' in v) {
               newFlags[key] = v.value;
@@ -99,7 +100,7 @@ export function FlagProvider({
         esRef.current.close();
       }
       try {
-        const url = `/api/sdk/stream?context=${encodeContext(context)}`;
+        const url = `/api/sdk/stream?context=${encodeContext(context)}&authorization=${encodeURIComponent(sdkKey)}`;
         const es = new EventSource(url);
         esRef.current = es;
 
@@ -108,47 +109,14 @@ export function FlagProvider({
           setConnectionType('sse');
         };
 
-        es.addEventListener('put', (e) => {
-          try {
-            const data = JSON.parse(e.data);
-            const newFlags: Record<string, unknown> = {};
-            const newDetails: Record<string, FlagDetail> = {};
-            for (const [key, val] of Object.entries(data as Record<string, unknown>)) {
-              const v = val as Record<string, unknown> | undefined;
-              if (v && typeof v === 'object' && 'value' in v) {
-                newFlags[key] = v.value;
-                newDetails[key] = {
-                  value: v.value,
-                  variationId: (v.variationId as string) || '',
-                  reason: (v.reason as string) || 'UNKNOWN',
-                };
-              } else {
-                newFlags[key] = val;
-                newDetails[key] = { value: val, variationId: '', reason: 'UNKNOWN' };
-              }
-            }
-            setFlags(newFlags);
-            setFlagDetails(newDetails);
-          } catch { /* ignore parse errors */ }
+        es.addEventListener('put', () => {
+          // SSE may send raw definitions; safest to re-fetch evaluated flags
+          fetchFlags(context);
         });
 
-        es.addEventListener('patch', (e) => {
-          try {
-            const data = JSON.parse(e.data) as Record<string, unknown>;
-            const key = data.key as string;
-            const v = data as Record<string, unknown>;
-            if (key) {
-              setFlags((prev) => ({ ...prev, [key]: v.value }));
-              setFlagDetails((prev) => ({
-                ...prev,
-                [key]: {
-                  value: v.value,
-                  variationId: (v.variationId as string) || '',
-                  reason: (v.reason as string) || 'UNKNOWN',
-                },
-              }));
-            }
-          } catch { /* ignore */ }
+        es.addEventListener('patch', () => {
+          // Re-fetch all flags to get properly evaluated values
+          fetchFlags(context);
         });
 
         es.onerror = () => {
@@ -160,7 +128,7 @@ export function FlagProvider({
         setConnectionType('none');
       }
     },
-    []
+    [sdkKey, fetchFlags]
   );
 
   const identify = useCallback(

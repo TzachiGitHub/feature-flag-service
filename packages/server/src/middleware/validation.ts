@@ -71,6 +71,7 @@ export const updateFlagSchema = z.object({
   description: z.string().optional(),
   tags: z.array(z.string()).optional(),
   temporary: z.boolean().optional(),
+  archived: z.boolean().optional(),
   variations: z.array(variationSchema).min(2).optional(),
 });
 

@@ -111,7 +111,8 @@ router.get('/flags', async (req: Request, res: Response) => {
             const ft = config.fallthrough as any;
             if (ft?.rollout) {
               // Percentage rollout — hash context key
-              const hash = Array.from(context.key || 'anonymous').reduce((h: number, c: string) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
+              const chars = Array.from(context.key || 'anonymous') as string[];
+              const hash = chars.reduce((h: number, c: string) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
               const bucket = Math.abs(hash) % 100000;
               let cumulative = 0;
               for (const rv of ft.rollout.variations || []) {

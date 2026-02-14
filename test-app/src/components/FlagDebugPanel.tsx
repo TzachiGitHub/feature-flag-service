@@ -57,9 +57,9 @@ export function FlagDebugPanel() {
                 {entries.map(([key, detail]) => (
                   <tr key={key} className="border-b border-gray-800 last:border-0">
                     <td className="py-2 pr-4 font-mono text-indigo-400">{key}</td>
-                    <td className="py-2 pr-4 font-mono">
+                    <td className="py-2 pr-4 font-mono max-w-xs" style={{ wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
                       {typeof detail.value === 'object'
-                        ? <span className="text-yellow-300">{JSON.stringify(detail.value)}</span>
+                        ? <pre className="text-yellow-300 whitespace-pre-wrap text-xs m-0">{JSON.stringify(detail.value, null, 2)}</pre>
                         : typeof detail.value === 'boolean'
                         ? <span className={detail.value ? 'text-green-400' : 'text-red-400'}>{String(detail.value)}</span>
                         : <span className="text-cyan-300">{JSON.stringify(detail.value)}</span>

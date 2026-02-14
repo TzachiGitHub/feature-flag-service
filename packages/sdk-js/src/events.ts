@@ -73,7 +73,7 @@ export class EventManager {
     try {
       if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
         navigator.sendBeacon(
-          `${this.baseUrl}/api/sdk/events`,
+          `${this.baseUrl}/api/sdk/events?authorization=${encodeURIComponent(this.sdkKey)}`,
           JSON.stringify({ events })
         );
       }

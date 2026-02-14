@@ -23,7 +23,7 @@ export default function PrerequisiteSelector({ prerequisites, currentFlagKey, pr
     setLoading(true);
     apiClient.get(`/projects/${projectKey}/flags`)
       .then((res: any) => {
-        const items = (res.data?.items || res.data || []) as FlagSummary[];
+        const items = (res.data?.flags || res.data?.data || res.data || []) as FlagSummary[];
         setFlags(items.filter((f: FlagSummary) => f.key !== currentFlagKey));
       })
       .catch(() => {})

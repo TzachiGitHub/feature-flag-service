@@ -26,6 +26,86 @@ interface AuditEntry {
   createdAt: string;
 }
 
+function SettingsTab({ flag, projectKey, onSaved }: { flag: any; projectKey?: string; onSaved: () => void }) {
+  const [name, setName] = useState(flag.name || '');
+  const [description, setDescription] = useState(flag.description || '');
+  const [tagsStr, setTagsStr] = useState((flag.tags || []).join(', '));
+  const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    setName(flag.name || '');
+    setDescription(flag.description || '');
+    setTagsStr((flag.tags || []).join(', '));
+  }, [flag]);
+
+  const handleSave = async () => {
+    if (!projectKey) return;
+    setSaving(true);
+    try {
+      const tags = tagsStr.split(',').map((t: string) => t.trim()).filter(Boolean);
+      await flagsApi.update(projectKey, flag.key, { name, description, tags });
+      toast('success', 'Settings saved');
+      onSaved();
+    } catch (err: any) {
+      toast('error', err.message || 'Failed to save settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!projectKey) return;
+    try {
+      await flagsApi.delete(projectKey, flag.key);
+      toast('success', 'Flag deleted');
+      navigate('/flags');
+    } catch (err: any) {
+      toast('error', err.message || 'Failed to delete flag');
+    }
+  };
+
+  return (
+    <div className="card p-6 space-y-6">
+      <div>
+        <h3 className="text-white font-medium mb-4">Flag Settings</h3>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm text-slate-300 mb-1">Name</label>
+            <input value={name} onChange={e => setName(e.target.value)} className="input-field" />
+          </div>
+          <div>
+            <label className="block text-sm text-slate-300 mb-1">Description</label>
+            <textarea value={description} onChange={e => setDescription(e.target.value)} className="input-field" rows={3} />
+          </div>
+          <div>
+            <label className="block text-sm text-slate-300 mb-1">Tags</label>
+            <input value={tagsStr} onChange={e => setTagsStr(e.target.value)} className="input-field" />
+          </div>
+          <button onClick={handleSave} disabled={saving} className="btn-primary">{saving ? 'Saving...' : 'Save Changes'}</button>
+        </div>
+      </div>
+      <div className="border-t border-slate-700 pt-6">
+        <h3 className="text-red-400 font-medium mb-2">Danger Zone</h3>
+        <p className="text-sm text-slate-400 mb-3">Permanently delete this flag. This action cannot be undone.</p>
+        <button onClick={() => setConfirmDelete(true)} className="btn-danger flex items-center gap-2">
+          <Trash2 className="h-4 w-4" /> Delete Flag
+        </button>
+      </div>
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete Flag"
+        message={`Are you sure you want to delete "${flag.name}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        danger
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
+    </div>
+  );
+}
+
 export default function FlagDetail() {
   const { flagKey } = useParams<{ flagKey: string }>();
   const navigate = useNavigate();
@@ -113,17 +193,25 @@ export default function FlagDetail() {
 
   const handleArchive = async () => {
     if (!currentProject || !currentFlag) return;
-    const willArchive = !currentFlag.archived;
-    await flagsApi.update(currentProject.key, currentFlag.key, { archived: willArchive });
-    toast('success', willArchive ? 'Flag archived' : 'Flag unarchived');
-    await fetchFlag(currentProject.key, currentFlag.key);
+    try {
+      const willArchive = !currentFlag.archived;
+      await flagsApi.update(currentProject.key, currentFlag.key, { archived: willArchive });
+      toast('success', willArchive ? 'Flag archived' : 'Flag unarchived');
+      await fetchFlag(currentProject.key, currentFlag.key);
+    } catch (err: any) {
+      toast('error', err.message || 'Failed to archive flag');
+    }
   };
 
   const handleDelete = async () => {
     if (!currentProject || !currentFlag) return;
-    await flagsApi.delete(currentProject.key, currentFlag.key);
-    toast('success', 'Flag deleted');
-    navigate('/flags');
+    try {
+      await flagsApi.delete(currentProject.key, currentFlag.key);
+      toast('success', 'Flag deleted');
+      navigate('/flags');
+    } catch (err: any) {
+      toast('error', err.message || 'Failed to delete flag');
+    }
   };
 
   if (loading || !currentFlag) return <div className="flex justify-center py-12"><Spinner size="lg" /></div>;
@@ -310,45 +398,9 @@ export default function FlagDetail() {
       )}
 
       {activeTab === 'Settings' && (
-        <div className="card p-6 space-y-6">
-          <div>
-            <h3 className="text-white font-medium mb-4">Flag Settings</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm text-slate-300 mb-1">Name</label>
-                <input defaultValue={currentFlag.name} className="input-field" />
-              </div>
-              <div>
-                <label className="block text-sm text-slate-300 mb-1">Description</label>
-                <textarea defaultValue={currentFlag.description} className="input-field" rows={3} />
-              </div>
-              <div>
-                <label className="block text-sm text-slate-300 mb-1">Tags</label>
-                <input defaultValue={currentFlag.tags?.join(', ')} className="input-field" />
-              </div>
-              <button className="btn-primary">Save Changes</button>
-            </div>
-          </div>
-
-          <div className="border-t border-slate-700 pt-6">
-            <h3 className="text-red-400 font-medium mb-2">Danger Zone</h3>
-            <p className="text-sm text-slate-400 mb-3">Permanently delete this flag. This action cannot be undone.</p>
-            <button onClick={() => setConfirmDelete(true)} className="btn-danger flex items-center gap-2">
-              <Trash2 className="h-4 w-4" /> Delete Flag
-            </button>
-          </div>
-        </div>
+        <SettingsTab flag={currentFlag} projectKey={currentProject?.key} onSaved={() => currentProject && flagKey && fetchFlag(currentProject.key, flagKey)} />
       )}
 
-      <ConfirmDialog
-        open={confirmDelete}
-        title="Delete Flag"
-        message={`Are you sure you want to delete "${currentFlag.name}"? This cannot be undone.`}
-        confirmLabel="Delete"
-        danger
-        onConfirm={handleDelete}
-        onCancel={() => setConfirmDelete(false)}
-      />
     </div>
   );
 }

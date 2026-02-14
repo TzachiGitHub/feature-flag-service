@@ -76,13 +76,12 @@ export class LightweightClient implements IFeatureFlagClient {
   private async fetchFlags(): Promise<void> {
     const base = this.options.baseUrl || '';
     const url = `${base}/api/sdk/flags`;
-    const res = await fetch(url, {
-      method: 'POST',
+    const contextParam = btoa(JSON.stringify(this.context));
+    const res = await fetch(`${url}?context=${encodeURIComponent(contextParam)}`, {
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
         'Authorization': this.sdkKey,
       },
-      body: JSON.stringify({ context: this.context }),
     });
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -102,10 +101,10 @@ export class LightweightClient implements IFeatureFlagClient {
 
   private startSSE(): void {
     const base = this.options.baseUrl || '';
-    const url = `${base}/api/sdk/stream?sdkKey=${encodeURIComponent(this.sdkKey)}`;
+    const url = `${base}/api/sdk/stream?authorization=${encodeURIComponent(this.sdkKey)}`;
     try {
       this.eventSource = new EventSource(url);
-      this.eventSource.addEventListener('flags', (e: MessageEvent) => {
+      this.eventSource.addEventListener('put', (e: MessageEvent) => {
         try {
           const data = JSON.parse(e.data);
           const oldFlags = this.flags;
@@ -114,6 +113,21 @@ export class LightweightClient implements IFeatureFlagClient {
           for (const key of Object.keys(this.flags)) {
             if (oldFlags[key] !== this.flags[key]) {
               this.emit('change', key, this.flags[key], oldFlags[key]);
+            }
+          }
+        } catch { /* ignore parse errors */ }
+      });
+      this.eventSource.addEventListener('patch', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.key) {
+            const oldValue = this.flags[data.key];
+            this.flags[data.key] = data.value;
+            if (data.variationId) {
+              this.details[data.key] = { value: data.value, variationId: data.variationId, reason: data.reason || 'FALLTHROUGH' };
+            }
+            if (oldValue !== data.value) {
+              this.emit('change', data.key, data.value, oldValue);
             }
           }
         } catch { /* ignore parse errors */ }

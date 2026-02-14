@@ -39,7 +39,7 @@ export default function TargetingEditor({ projectKey, flagKey, envKey, variation
       const loaded: TargetingConfig = {
         on: data.on ?? false,
         targets: data.targets || [],
-        rules: data.rules || [],
+        rules: (data.rules || []).map((r: any) => ({ ...r, serve: r.serve || { variationId: r.variationId } })),
         fallthrough: data.fallthrough || {},
         offVariation: data.offVariationId || data.offVariation,
         prerequisites: data.prerequisites || [],
@@ -63,6 +63,7 @@ export default function TargetingEditor({ projectKey, flagKey, envKey, variation
       const payload = {
         ...config,
         offVariationId: config.offVariation,
+        rules: config.rules.map((r: any) => ({ ...r, variationId: r.serve?.variationId, serve: undefined })),
       };
       delete (payload as any).offVariation;
       await apiClient.patch(`/projects/${projectKey}/flags/${flagKey}/environments/${envKey}`, payload);
