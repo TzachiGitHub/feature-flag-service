@@ -42,7 +42,7 @@ export function FlagDebugPanel() {
           {!ready ? (
             <p className="text-gray-500 text-sm py-2">Loading flags...</p>
           ) : entries.length === 0 ? (
-            <p className="text-gray-500 text-sm py-2">No flags received. Is the backend running on port 3020?</p>
+            <p className="text-gray-500 text-sm py-2">No flags received. Check SDK key and API connection.</p>
           ) : (
             <table className="w-full text-sm">
               <thead>
