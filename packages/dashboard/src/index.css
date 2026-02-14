@@ -7,6 +7,15 @@
     @apply bg-slate-900 text-slate-300 antialiased;
   }
 
+  ::selection {
+    @apply bg-indigo-500/30;
+  }
+
+  :focus-visible {
+    outline: 2px solid theme('colors.indigo.500');
+    outline-offset: 2px;
+  }
+
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -38,4 +47,13 @@
   .card {
     @apply bg-slate-800 border border-slate-700 rounded-lg;
   }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-shimmer {
+  animation: shimmer 1.5s infinite;
 }

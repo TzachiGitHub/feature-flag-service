@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/authStore';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -25,21 +26,23 @@ export default function App() {
   useEffect(() => { loadFromStorage(); }, []);
 
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        <Route index element={<Navigate to="/flags" replace />} />
-        <Route path="flags" element={<FlagList />} />
-        <Route path="flags/:flagKey" element={<FlagDetail />} />
-        <Route path="segments" element={<Segments />} />
-        <Route path="segments/:segmentKey" element={<SegmentDetail />} />
-        <Route path="analytics" element={<Analytics />} />
-        <Route path="audit-log" element={<AuditLog />} />
-        <Route path="settings" element={<Settings />} />
-        <Route path="playground" element={<Playground />} />
-        <Route path="learn" element={<Learn />} />
-      </Route>
-    </Routes>
+    <ErrorBoundary>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+          <Route index element={<Navigate to="/flags" replace />} />
+          <Route path="flags" element={<ErrorBoundary><FlagList /></ErrorBoundary>} />
+          <Route path="flags/:flagKey" element={<ErrorBoundary><FlagDetail /></ErrorBoundary>} />
+          <Route path="segments" element={<ErrorBoundary><Segments /></ErrorBoundary>} />
+          <Route path="segments/:segmentKey" element={<ErrorBoundary><SegmentDetail /></ErrorBoundary>} />
+          <Route path="analytics" element={<ErrorBoundary><Analytics /></ErrorBoundary>} />
+          <Route path="audit-log" element={<ErrorBoundary><AuditLog /></ErrorBoundary>} />
+          <Route path="settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+          <Route path="playground" element={<ErrorBoundary><Playground /></ErrorBoundary>} />
+          <Route path="learn" element={<ErrorBoundary><Learn /></ErrorBoundary>} />
+        </Route>
+      </Routes>
+    </ErrorBoundary>
   );
 }
