@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { apiClient } from '../api/client';
 import { useProjectStore } from '../stores/projectStore';
 import { Segment } from '../components/targeting/types';
 import ChipInput from '../components/targeting/ChipInput';
 import RuleBuilder from '../components/targeting/RuleBuilder';
+import { PageSkeleton } from '../components/Skeleton';
+import { ErrorState } from '../components/ErrorBoundary';
+import { useKeyboardShortcut } from '../hooks/useKeyboardShortcuts';
 
 export default function SegmentDetail() {
   const { segmentKey } = useParams<{ segmentKey: string }>();
@@ -20,7 +24,17 @@ export default function SegmentDetail() {
 
   const hasChanges = JSON.stringify(segment) !== JSON.stringify(saved);
 
+  // Cmd+S to save
+  useKeyboardShortcut({
+    key: 's',
+    ctrl: true,
+    handler: () => { if (hasChanges) save(); },
+    preventDefault: true,
+  });
+
   useEffect(() => {
+    setLoading(true);
+    setError(null);
     apiClient.get(`/projects/${projectKey}/segments/${segmentKey}`)
       .then((res: any) => {
         const data = res.data || res;
@@ -55,23 +69,30 @@ export default function SegmentDetail() {
     }
   };
 
-  if (loading) return <div className="text-slate-400 text-center py-8">Loading segment...</div>;
-  if (!segment) return <div className="text-red-400 text-center py-8">{error || 'Segment not found'}</div>;
+  if (loading) return <PageSkeleton />;
+  if (!segment && error) return <ErrorState title="Segment not found" message={error} onRetry={() => navigate('/segments')} retryLabel="Back to Segments" />;
+  if (!segment) return null;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <motion.div
+      className="max-w-4xl mx-auto space-y-6"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      data-unsaved={hasChanges || undefined}
+    >
       {error && (
-        <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm">{error}</div>
+        <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm" role="alert">{error}</div>
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">{segment.name}</h1>
           <span className="text-sm text-slate-500 font-mono">{segment.key}</span>
           {segment.description && <p className="text-sm text-slate-400 mt-1">{segment.description}</p>}
         </div>
-        <button onClick={() => navigate('/segments')} className="text-sm text-slate-400 hover:text-white">
+        <button onClick={() => navigate('/segments')} className="text-sm text-slate-400 hover:text-white transition-colors self-start" aria-label="Back to Segments">
           ← Back to Segments
         </button>
       </div>
@@ -98,7 +119,7 @@ export default function SegmentDetail() {
         />
       </div>
 
-      {/* Rules (no serve) */}
+      {/* Rules */}
       <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
         <RuleBuilder
           rules={segment.rules || []}
@@ -108,32 +129,47 @@ export default function SegmentDetail() {
         />
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-3">
-        {hasChanges && (
-          <>
-            <button
-              onClick={save}
-              disabled={saving}
-              className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 px-4 rounded-lg transition-colors disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
+      {/* Actions - sticky save bar */}
+      {hasChanges && (
+        <motion.div
+          className="sticky bottom-16 sm:bottom-4 z-20 bg-slate-900/95 backdrop-blur-sm border border-slate-700 rounded-xl p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-lg"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 20 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        >
+          <span className="text-sm text-slate-400">You have unsaved changes</span>
+          <div className="flex gap-3">
             <button
               onClick={() => setSegment(saved ? { ...saved } : segment)}
-              className="bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium py-2.5 px-4 rounded-lg transition-colors"
+              className="bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium py-2 px-4 rounded-lg transition-all active:scale-[0.98]"
+              aria-label="Discard changes"
             >
               Discard
             </button>
-          </>
-        )}
-        <button
-          onClick={deleteSegment}
-          className="bg-red-600 hover:bg-red-500 text-white font-medium py-2.5 px-4 rounded-lg transition-colors"
-        >
-          Delete Segment
-        </button>
-      </div>
-    </div>
+            <button
+              onClick={save}
+              disabled={saving}
+              className="flex-1 sm:flex-initial bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 px-6 rounded-lg transition-all disabled:opacity-50 active:scale-[0.98]"
+              aria-label="Save changes"
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      {!hasChanges && (
+        <div className="flex gap-3">
+          <button
+            onClick={deleteSegment}
+            className="bg-red-600 hover:bg-red-500 text-white font-medium py-2.5 px-4 rounded-lg transition-all active:scale-[0.98]"
+            aria-label="Delete segment"
+          >
+            Delete Segment
+          </button>
+        </div>
+      )}
+    </motion.div>
   );
 }

@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import api from '../api/client';
 import { useProjectStore } from '../stores/projectStore';
 import { toast } from '../components/Toast';
+import { SettingsSkeleton } from '../components/Skeleton';
+import { ErrorState } from '../components/ErrorBoundary';
+import { staggerContainer, staggerItem } from '../lib/animations';
 
 interface Environment {
   key: string;
@@ -15,7 +19,8 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-      className="text-xs text-indigo-400 hover:text-indigo-300 font-medium"
+      className="text-xs text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
+      aria-label="Copy to clipboard"
     >
       {copied ? '✓ Copied' : 'Copy'}
     </button>
@@ -23,7 +28,6 @@ function CopyButton({ text }: { text: string }) {
 }
 
 function CodeBlock({ code, language }: { code: string; language?: string }) {
-  // Simple syntax coloring
   const highlighted = code
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/(\/\/.*)/g, '<span class="text-slate-500">$1</span>')
@@ -45,6 +49,8 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
 
 export default function Settings() {
   const [envs, setEnvs] = useState<Environment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
   const [rotateConfirm, setRotateConfirm] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -53,11 +59,16 @@ export default function Settings() {
   const projectKey = currentProject?.key ?? '';
   const projectName = currentProject?.name ?? 'My Project';
 
-  useEffect(() => {
+  const fetchEnvs = () => {
+    setLoading(true);
+    setError(false);
     api.get(`/projects/${projectKey}/environments`)
       .then(r => setEnvs(r.data?.environments || r.data || []))
-      .catch(() => { setEnvs([]); toast('error', 'Failed to load environments'); });
-  }, []);
+      .catch(() => { setEnvs([]); setError(true); })
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchEnvs(); }, [projectKey]);
 
   const maskKey = (key: string) => {
     if (key.length <= 10) return '***';
@@ -116,48 +127,65 @@ function MyComponent() {
   return darkMode ? <DarkTheme /> : <LightTheme />;
 }`;
 
+  if (loading) return <SettingsSkeleton />;
+
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-8">
+    <motion.div
+      className="p-4 sm:p-6 max-w-5xl mx-auto space-y-8"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+    >
       <h1 className="text-2xl font-bold text-white">Settings</h1>
 
       {/* Environments */}
-      <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
-        <h2 className="text-lg font-semibold text-white mb-4">Environments</h2>
-        <div className="space-y-3">
-          {envs.map(env => (
-            <div key={env.key} className="flex items-center justify-between bg-slate-900 rounded-lg p-4 border border-slate-700/50">
-              <div className="flex items-center gap-3">
-                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: env.color }} />
-                <div>
-                  <div className="text-white font-medium">{env.name}</div>
-                  <div className="text-xs text-slate-500">{env.key}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <code
-                  className="text-xs bg-slate-950 px-3 py-1.5 rounded text-slate-400 cursor-pointer font-mono"
-                  onClick={() => toggleReveal(env.key)}
-                  title="Click to reveal"
-                >
-                  {revealedKeys.has(env.key) ? env.sdkKey : maskKey(env.sdkKey)}
-                </code>
-                <CopyButton text={env.sdkKey} />
-                {rotateConfirm === env.key ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-amber-400">Rotate?</span>
-                    <button onClick={() => handleRotateKey(env.key)} className="text-xs text-red-400 hover:text-red-300 font-medium">Yes</button>
-                    <button onClick={() => setRotateConfirm(null)} className="text-xs text-slate-400 hover:text-slate-300">No</button>
+      {error ? (
+        <ErrorState title="Failed to load environments" onRetry={fetchEnvs} />
+      ) : (
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
+          <h2 className="text-lg font-semibold text-white mb-4">Environments</h2>
+          <motion.div className="space-y-3" variants={staggerContainer} initial="initial" animate="animate">
+            {envs.map(env => (
+              <motion.div
+                key={env.key}
+                className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-900 rounded-lg p-4 border border-slate-700/50 gap-3 hover:bg-slate-850 transition-colors"
+                variants={staggerItem}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: env.color }} aria-hidden="true" />
+                  <div>
+                    <div className="text-white font-medium">{env.name}</div>
+                    <div className="text-xs text-slate-500">{env.key}</div>
                   </div>
-                ) : (
-                  <button onClick={() => setRotateConfirm(env.key)} className="text-xs text-amber-400 hover:text-amber-300 font-medium">
-                    Rotate Key
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <code
+                    className="text-xs bg-slate-950 px-3 py-1.5 rounded text-slate-400 cursor-pointer font-mono hover:bg-slate-900 transition-colors break-all"
+                    onClick={() => toggleReveal(env.key)}
+                    title="Click to reveal"
+                    role="button"
+                    aria-label={revealedKeys.has(env.key) ? 'Hide SDK key' : 'Reveal SDK key'}
+                  >
+                    {revealedKeys.has(env.key) ? env.sdkKey : maskKey(env.sdkKey)}
+                  </code>
+                  <CopyButton text={env.sdkKey} />
+                  {rotateConfirm === env.key ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-amber-400">Rotate?</span>
+                      <button onClick={() => handleRotateKey(env.key)} className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors" aria-label="Confirm rotate">Yes</button>
+                      <button onClick={() => setRotateConfirm(null)} className="text-xs text-slate-400 hover:text-slate-300 transition-colors" aria-label="Cancel rotate">No</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setRotateConfirm(env.key)} className="text-xs text-amber-400 hover:text-amber-300 font-medium transition-colors" aria-label={`Rotate SDK key for ${env.name}`}>
+                      Rotate Key
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
         </div>
-      </div>
+      )}
 
       {/* SDK Integration */}
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
@@ -175,13 +203,14 @@ function MyComponent() {
       </div>
 
       {/* Danger Zone */}
-      <div className="bg-slate-800 border border-red-900/50 rounded-xl p-5">
+      <div className="bg-slate-800 border-l-4 border-l-red-600 border border-red-900/50 rounded-xl p-5">
         <h2 className="text-lg font-semibold text-red-400 mb-2">Danger Zone</h2>
         <p className="text-sm text-slate-400 mb-4">Deleting this project is permanent and cannot be undone.</p>
         {!deleteConfirm ? (
           <button
             onClick={() => setDeleteConfirm(true)}
-            className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all active:scale-[0.98]"
+            aria-label="Delete project"
           >
             Delete Project
           </button>
@@ -190,24 +219,26 @@ function MyComponent() {
             <p className="text-sm text-slate-300">Type <strong className="text-white">{projectName}</strong> to confirm:</p>
             <input
               type="text" value={deleteInput} onChange={e => setDeleteInput(e.target.value)}
-              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-300 focus:outline-none focus:border-red-500 w-64"
+              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-300 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500 w-full sm:w-64 transition-colors"
               placeholder={projectName}
+              aria-label="Type project name to confirm deletion"
             />
             <div className="flex gap-2">
               <button
                 onClick={handleDeleteProject}
                 disabled={deleteInput !== projectName}
-                className="bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                className="bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-all active:scale-[0.98]"
+                aria-label="Confirm project deletion"
               >
                 Confirm Delete
               </button>
-              <button onClick={() => { setDeleteConfirm(false); setDeleteInput(''); }} className="text-sm text-slate-400 hover:text-white">
+              <button onClick={() => { setDeleteConfirm(false); setDeleteInput(''); }} className="text-sm text-slate-400 hover:text-white transition-colors" aria-label="Cancel deletion">
                 Cancel
               </button>
             </div>
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }

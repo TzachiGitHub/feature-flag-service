@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { apiClient } from '../api/client';
 import { useProjectStore } from '../stores/projectStore';
 import { Segment } from '../components/targeting/types';
+import { SegmentCardSkeleton } from '../components/Skeleton';
+import { ErrorState } from '../components/ErrorBoundary';
+import { staggerContainer, staggerItem } from '../lib/animations';
 
 export default function Segments() {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [newKey, setNewKey] = useState('');
@@ -15,12 +20,16 @@ export default function Segments() {
   const { currentProject } = useProjectStore();
   const projectKey = currentProject?.key ?? '';
 
-  useEffect(() => {
+  const fetchSegments = () => {
+    setLoading(true);
+    setError(false);
     apiClient.get(`/projects/${projectKey}/segments`)
       .then((res: any) => setSegments(res.data?.items || res.data || []))
-      .catch(() => {})
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [projectKey]);
+  };
+
+  useEffect(() => { fetchSegments(); }, [projectKey]);
 
   const createSegment = async () => {
     if (!newName || !newKey) return;
@@ -35,9 +44,7 @@ export default function Segments() {
       });
       setShowCreate(false);
       setNewName(''); setNewKey(''); setNewDesc('');
-      // Refresh
-      const res = await apiClient.get(`/projects/${projectKey}/segments`);
-      setSegments(res.data?.items || res.data || []);
+      fetchSegments();
     } catch {}
   };
 
@@ -47,7 +54,8 @@ export default function Segments() {
         <h1 className="text-2xl font-bold text-white">Segments</h1>
         <button
           onClick={() => setShowCreate(true)}
-          className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all duration-150 active:scale-[0.98]"
+          aria-label="Create new segment"
         >
           + New Segment
         </button>
@@ -55,19 +63,26 @@ export default function Segments() {
 
       {/* Create modal */}
       {showCreate && (
-        <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-6 space-y-3">
-          <input value={newName} onChange={(e) => { setNewName(e.target.value); if (!newKey || newKey === newName.toLowerCase().replace(/\s+/g, '-')) setNewKey(e.target.value.toLowerCase().replace(/\s+/g, '-')); }} placeholder="Segment name" className="w-full bg-slate-700 text-white border border-slate-600 rounded-md px-3 py-2 text-sm placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none" />
-          <input value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="segment-key" className="w-full bg-slate-700 text-white border border-slate-600 rounded-md px-3 py-2 text-sm placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none" />
-          <input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Description (optional)" className="w-full bg-slate-700 text-white border border-slate-600 rounded-md px-3 py-2 text-sm placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none" />
+        <motion.div
+          className="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-6 space-y-3"
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.15 }}
+        >
+          <input value={newName} onChange={(e) => { setNewName(e.target.value); if (!newKey || newKey === newName.toLowerCase().replace(/\s+/g, '-')) setNewKey(e.target.value.toLowerCase().replace(/\s+/g, '-')); }} placeholder="Segment name" className="w-full bg-slate-700 text-white border border-slate-600 rounded-md px-3 py-2 text-sm placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none transition-colors" aria-label="Segment name" />
+          <input value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="segment-key" className="w-full bg-slate-700 text-white border border-slate-600 rounded-md px-3 py-2 text-sm placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none transition-colors" aria-label="Segment key" />
+          <input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Description (optional)" className="w-full bg-slate-700 text-white border border-slate-600 rounded-md px-3 py-2 text-sm placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none transition-colors" aria-label="Segment description" />
           <div className="flex gap-2">
-            <button onClick={createSegment} className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm px-4 py-2 rounded-lg">Create</button>
-            <button onClick={() => setShowCreate(false)} className="bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm px-4 py-2 rounded-lg">Cancel</button>
+            <button onClick={createSegment} className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm px-4 py-2 rounded-lg transition-all active:scale-[0.98]" aria-label="Create segment">Create</button>
+            <button onClick={() => setShowCreate(false)} className="bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm px-4 py-2 rounded-lg transition-colors" aria-label="Cancel">Cancel</button>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {loading ? (
-        <div className="text-slate-400 text-center py-12">Loading segments...</div>
+        <SegmentCardSkeleton />
+      ) : error ? (
+        <ErrorState title="Failed to load segments" onRetry={fetchSegments} />
       ) : segments.length === 0 ? (
         <div className="text-center py-16">
           <div className="text-slate-500 text-4xl mb-3">📦</div>
@@ -75,14 +90,19 @@ export default function Segments() {
           <p className="text-sm text-slate-500 mt-1">Create a segment to group users by shared attributes.</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <motion.div className="space-y-2" variants={staggerContainer} initial="initial" animate="animate">
           {segments.map((seg) => (
-            <div
+            <motion.div
               key={seg.key}
+              variants={staggerItem}
               onClick={() => navigate(`/segments/${seg.key}`)}
-              className="bg-slate-800 border border-slate-700 rounded-lg p-4 cursor-pointer hover:border-slate-600 transition-colors"
+              className="bg-slate-800 border border-slate-700 rounded-lg p-4 cursor-pointer hover:border-slate-600 hover:-translate-y-[1px] hover:shadow-lg transition-all duration-150"
+              role="button"
+              tabIndex={0}
+              aria-label={`Segment: ${seg.name}`}
+              onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/segments/${seg.key}`); }}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <h3 className="text-white font-medium">{seg.name}</h3>
                   <span className="text-xs text-slate-500 font-mono">{seg.key}</span>
@@ -93,9 +113,9 @@ export default function Segments() {
                   <span>{(seg.included?.length || 0) + (seg.excluded?.length || 0)} targets</span>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
     </div>
   );
