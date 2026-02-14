@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      Role     @default(READER)
+  createdAt DateTime @default(now())
+
+  auditLogs AuditLogEntry[]
+
+  @@map("users")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  WRITER
+  READER
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  key         String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  environments Environment[]
+  flags        Flag[]
+  segments     Segment[]
+  auditLogs    AuditLogEntry[]
+
+  @@map("projects")
+}
+
+model Environment {
+  id           String   @id @default(uuid())
+  name         String
+  key          String
+  color        String   @default("#4CAF50")
+  sdkKey       String   @unique @default(uuid())
+  sdkKeyServer String   @unique @default(uuid())
+  projectId    String
+  createdAt    DateTime @default(now())
+
+  project    Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  flagConfigs FlagEnvironmentConfig[]
+
+  @@unique([projectId, key])
+  @@map("environments")
+}
+
+enum FlagType {
+  BOOLEAN
+  STRING
+  NUMBER
+  JSON
+}
+
+model Flag {
+  id          String   @id @default(uuid())
+  key         String
+  name        String
+  description String?
+  type        FlagType @default(BOOLEAN)
+  tags        String[] @default([])
+  temporary   Boolean  @default(false)
+  archived    Boolean  @default(false)
+  projectId   String
+  variations  Json     @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project        Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  environmentConfigs FlagEnvironmentConfig[]
+  prerequisites  FlagPrerequisite[]      @relation("flagPrerequisites")
+  dependents     FlagPrerequisite[]      @relation("prerequisiteFlag")
+
+  @@unique([projectId, key])
+  @@index([projectId, archived])
+  @@map("flags")
+}
+
+model FlagEnvironmentConfig {
+  id              String   @id @default(uuid())
+  flagId          String
+  environmentId   String
+  on              Boolean  @default(false)
+  offVariationId  String?
+  fallthrough     Json     @default("{}")
+  targets         Json     @default("[]")
+  rules           Json     @default("[]")
+  version         Int      @default(1)
+  updatedAt       DateTime @updatedAt
+
+  flag        Flag        @relation(fields: [flagId], references: [id], onDelete: Cascade)
+  environment Environment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+
+  @@unique([flagId, environmentId])
+  @@index([environmentId])
+  @@map("flag_environment_configs")
+}
+
+model FlagPrerequisite {
+  id                String @id @default(uuid())
+  flagId            String
+  prerequisiteFlagId String
+  variationId       String
+
+  flag             Flag @relation("flagPrerequisites", fields: [flagId], references: [id], onDelete: Cascade)
+  prerequisiteFlag Flag @relation("prerequisiteFlag", fields: [prerequisiteFlagId], references: [id], onDelete: Cascade)
+
+  @@unique([flagId, prerequisiteFlagId])
+  @@map("flag_prerequisites")
+}
+
+model Segment {
+  id          String   @id @default(uuid())
+  key         String
+  name        String
+  description String?
+  projectId   String
+  rules       Json     @default("[]")
+  included    String[] @default([])
+  excluded    String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, key])
+  @@map("segments")
+}
+
+model AuditLogEntry {
+  id        String   @id @default(uuid())
+  projectId String
+  flagKey   String?
+  action    String
+  userId    String
+  userName  String
+  before    Json?
+  after     Json?
+  comment   String?
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([projectId, createdAt])
+  @@index([flagKey])
+  @@map("audit_log_entries")
+}
+
+model AnalyticsEvent {
+  id          String   @id @default(uuid())
+  kind        String
+  flagKey     String?
+  variationId String?
+  contextKey  String
+  contextKind String
+  value       Json?
+  data        Json?
+  timestamp   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([flagKey, timestamp])
+  @@index([contextKey])
+  @@map("analytics_events")
+}

@@ -1,0 +1,8 @@
+{
+  "name": "feature-flag-service",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "test-app"
+  ]
+}
