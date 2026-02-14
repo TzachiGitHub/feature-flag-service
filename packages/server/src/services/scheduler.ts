@@ -43,6 +43,7 @@ class FlagScheduler {
   }
 
   async processDueChanges(): Promise<void> {
+    try {
     const now = new Date();
 
     const dueChanges = await prisma.$queryRaw<ScheduledChange[]>`
@@ -81,6 +82,12 @@ class FlagScheduler {
         }
       } catch (error) {
         console.error(`Error executing scheduled change ${change.id}:`, error);
+      }
+    }
+    } catch (error: any) {
+      // Silently ignore if scheduled_changes table doesn't exist yet
+      if (error?.meta?.code !== '42P01') {
+        console.error('Scheduler error:', error);
       }
     }
   }

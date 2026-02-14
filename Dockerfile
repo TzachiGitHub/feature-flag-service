@@ -36,4 +36,6 @@ RUN cd packages/server && npx prisma generate --schema=src/prisma/schema.prisma
 EXPOSE 3020
 
 # Push schema and start server
-CMD cd packages/server && npx prisma db push --schema=src/prisma/schema.prisma --accept-data-loss && npx tsx src/index.ts
+CMD cd packages/server && npx prisma db push --schema=src/prisma/schema.prisma --accept-data-loss && \
+    npx tsx -e "const { PrismaClient } = require('@prisma/client'); const p = new PrismaClient(); p.\$executeRawUnsafe('CREATE TABLE IF NOT EXISTS scheduled_changes (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), flag_id TEXT NOT NULL, environment_id TEXT NOT NULL, change_type TEXT NOT NULL, scheduled_at TIMESTAMPTZ NOT NULL, payload JSONB, executed BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT NOW())').then(() => p.\$disconnect()).catch(() => p.\$disconnect())" 2>/dev/null; \
+    npx tsx src/index.ts

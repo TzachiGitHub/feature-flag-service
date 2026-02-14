@@ -38,7 +38,7 @@ export default function CreateFlagModal({ open, onClose }: Props) {
         ? [{ value: true, name: 'True' }, { value: false, name: 'False' }]
         : variations.map((v) => ({ value: type === 'number' ? Number(v.value) : v.value, name: v.name }));
       await flagsApi.create(currentProject.key, {
-        name, key, description, type,
+        name, key, description, type: type.toUpperCase(),
         tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
         variations: flagVariations,
       });
