@@ -41,7 +41,7 @@ export default function TargetingEditor({ projectKey, flagKey, envKey, variation
         targets: data.targets || [],
         rules: data.rules || [],
         fallthrough: data.fallthrough || {},
-        offVariation: data.offVariation,
+        offVariation: data.offVariationId || data.offVariation,
         prerequisites: data.prerequisites || [],
       };
       setConfig(loaded);
@@ -59,7 +59,13 @@ export default function TargetingEditor({ projectKey, flagKey, envKey, variation
     try {
       setSaving(true);
       setError(null);
-      await apiClient.patch(`/projects/${projectKey}/flags/${flagKey}/environments/${envKey}`, config);
+      // Map offVariation → offVariationId for the server
+      const payload = {
+        ...config,
+        offVariationId: config.offVariation,
+      };
+      delete (payload as any).offVariation;
+      await apiClient.patch(`/projects/${projectKey}/flags/${flagKey}/environments/${envKey}`, payload);
       setSavedConfig({ ...config });
     } catch (err: any) {
       setError(err.message || 'Failed to save');
