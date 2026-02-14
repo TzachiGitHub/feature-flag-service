@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
+import { useProjectStore } from '../stores/projectStore';
 import { Segment } from '../components/targeting/types';
 import ChipInput from '../components/targeting/ChipInput';
 import RuleBuilder from '../components/targeting/RuleBuilder';
@@ -8,7 +9,8 @@ import RuleBuilder from '../components/targeting/RuleBuilder';
 export default function SegmentDetail() {
   const { segmentKey } = useParams<{ segmentKey: string }>();
   const navigate = useNavigate();
-  const projectKey = 'default'; // TODO: from route/store
+  const { currentProject } = useProjectStore();
+  const projectKey = currentProject?.key ?? '';
 
   const [segment, setSegment] = useState<Segment | null>(null);
   const [saved, setSaved] = useState<Segment | null>(null);

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../api/client';
+import { useProjectStore } from '../stores/projectStore';
 
 const PERIODS = ['1h', '24h', '7d', '30d'] as const;
 type Period = (typeof PERIODS)[number];
@@ -143,7 +144,8 @@ export default function Analytics() {
   const [hoveredBar, setHoveredBar] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const projectKey = 'default'; // TODO: get from route/store
+  const { currentProject } = useProjectStore();
+  const projectKey = currentProject?.key ?? '';
 
   useEffect(() => {
     setLoading(true);

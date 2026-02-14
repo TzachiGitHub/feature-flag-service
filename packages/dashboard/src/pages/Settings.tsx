@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/client';
+import { useProjectStore } from '../stores/projectStore';
+import { toast } from '../components/Toast';
 
 interface Environment {
   key: string;
@@ -47,8 +49,9 @@ export default function Settings() {
   const [rotateConfirm, setRotateConfirm] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
-  const projectKey = 'default';
-  const projectName = 'My Project';
+  const { currentProject, fetchProjects } = useProjectStore();
+  const projectKey = currentProject?.key ?? '';
+  const projectName = currentProject?.name ?? 'My Project';
 
   useEffect(() => {
     api.get(`/api/projects/${projectKey}/environments`)
@@ -73,16 +76,31 @@ export default function Settings() {
     });
   };
 
-  const handleRotateKey = (envKey: string) => {
-    // TODO: call API to rotate key
+  const handleRotateKey = async (envKey: string) => {
+    try {
+      const res = await api.post(`/api/projects/${projectKey}/environments/${envKey}/rotate-key`);
+      const newKey = res.data?.sdkKey;
+      if (newKey) {
+        setEnvs(prev => prev.map(e => e.key === envKey ? { ...e, sdkKey: newKey } : e));
+      }
+      toast('success', `SDK key rotated for ${envKey}`);
+    } catch {
+      toast('error', 'Failed to rotate key');
+    }
     setRotateConfirm(null);
   };
 
-  const handleDeleteProject = () => {
-    if (deleteInput === projectName) {
-      // TODO: call API to delete project
-      setDeleteConfirm(false);
+  const handleDeleteProject = async () => {
+    if (deleteInput !== projectName) return;
+    try {
+      await api.delete(`/api/projects/${projectKey}`);
+      toast('success', 'Project deleted');
+      await fetchProjects();
+      window.location.href = '/';
+    } catch {
+      toast('error', 'Failed to delete project');
     }
+    setDeleteConfirm(false);
   };
 
   const installSnippet = `npm install @feature-flag/sdk-js @feature-flag/sdk-react`;

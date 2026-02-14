@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
+import { useProjectStore } from '../stores/projectStore';
 import { Segment } from '../components/targeting/types';
 
 export default function Segments() {
@@ -11,9 +12,8 @@ export default function Segments() {
   const [newKey, setNewKey] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const navigate = useNavigate();
-
-  // TODO: get projectKey from route params or store
-  const projectKey = 'default';
+  const { currentProject } = useProjectStore();
+  const projectKey = currentProject?.key ?? '';
 
   useEffect(() => {
     apiClient.get(`/api/projects/${projectKey}/segments`)

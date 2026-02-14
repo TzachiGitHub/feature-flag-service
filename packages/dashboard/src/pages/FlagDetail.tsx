@@ -1,17 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Copy, Archive, Trash2, ArrowLeft } from 'lucide-react';
+import { Copy, Archive, Trash2, ArrowLeft, Clock, User } from 'lucide-react';
 import clsx from 'clsx';
 import { useFlagStore } from '../stores/flagStore';
 import { useProjectStore } from '../stores/projectStore';
-import { flagsApi } from '../api/client';
-import Toggle from '../components/Toggle';
+import { flagsApi, auditLogApi } from '../api/client';
+import { TargetingEditor } from '../components/targeting';
+import AuditDiff from '../components/AuditDiff';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { toast } from '../components/Toast';
 
 const tabs = ['Targeting', 'Variations', 'Activity', 'Settings'] as const;
+
+interface AuditEntry {
+  id: string;
+  action: string;
+  userName: string;
+  userId: string;
+  flagKey?: string;
+  before?: any;
+  after?: any;
+  comment?: string;
+  createdAt: string;
+}
 
 export default function FlagDetail() {
   const { flagKey } = useParams<{ flagKey: string }>();
@@ -20,10 +33,60 @@ export default function FlagDetail() {
   const { currentProject, currentEnvironment } = useProjectStore();
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>('Targeting');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [toggling, setToggling] = useState(false);
+  const [envOn, setEnvOn] = useState<boolean | null>(null);
+
+  // Activity state
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditOffset, setAuditOffset] = useState(0);
+  const AUDIT_LIMIT = 20;
 
   useEffect(() => {
     if (currentProject && flagKey) fetchFlag(currentProject.key, flagKey);
   }, [currentProject?.key, flagKey]);
+
+  // Fetch targeting on/off state for current environment
+  const fetchEnvState = useCallback(async () => {
+    if (!currentProject || !flagKey || !currentEnvironment) return;
+    try {
+      const res = await flagsApi.getTargeting(currentProject.key, flagKey, currentEnvironment.key);
+      const data = res.data;
+      setEnvOn(data.on ?? false);
+    } catch {
+      setEnvOn(null);
+    }
+  }, [currentProject?.key, flagKey, currentEnvironment?.key]);
+
+  useEffect(() => {
+    fetchEnvState();
+  }, [fetchEnvState]);
+
+  // Fetch audit log
+  const fetchAuditLog = useCallback(async (offset = 0, append = false) => {
+    if (!currentProject || !flagKey) return;
+    setAuditLoading(true);
+    try {
+      const res = await auditLogApi.list(currentProject.key, { flagKey, limit: AUDIT_LIMIT, offset });
+      const data = res.data;
+      setAuditEntries(prev => append ? [...prev, ...data.entries] : data.entries);
+      setAuditTotal(data.total);
+      setAuditOffset(offset + data.entries.length);
+    } catch {
+      // ignore
+    } finally {
+      setAuditLoading(false);
+    }
+  }, [currentProject?.key, flagKey]);
+
+  useEffect(() => {
+    if (activeTab === 'Activity') {
+      setAuditEntries([]);
+      setAuditOffset(0);
+      fetchAuditLog(0, false);
+    }
+  }, [activeTab, fetchAuditLog]);
 
   const handleCopyKey = () => {
     if (currentFlag) {
@@ -33,17 +96,27 @@ export default function FlagDetail() {
   };
 
   const handleToggle = async () => {
-    if (currentProject && currentFlag && currentEnvironment) {
-      await flagsApi.toggle(currentProject.key, currentFlag.key, currentEnvironment.key);
-      fetchFlag(currentProject.key, currentFlag.key);
+    if (!currentProject || !currentFlag || !currentEnvironment || envOn === null) return;
+    const newOn = !envOn;
+    setToggling(true);
+    setEnvOn(newOn); // optimistic update
+    try {
+      await flagsApi.toggle(currentProject.key, currentFlag.key, currentEnvironment.key, newOn);
+      toast('success', `Flag ${newOn ? 'enabled' : 'disabled'} in ${currentEnvironment.name}`);
+    } catch {
+      setEnvOn(!newOn); // revert
+      toast('error', 'Failed to toggle flag');
+    } finally {
+      setToggling(false);
     }
   };
 
   const handleArchive = async () => {
     if (!currentProject || !currentFlag) return;
-    await flagsApi.update(currentProject.key, currentFlag.key, { archived: !currentFlag.archived });
-    toast('success', currentFlag.archived ? 'Flag unarchived' : 'Flag archived');
-    fetchFlag(currentProject.key, currentFlag.key);
+    const willArchive = !currentFlag.archived;
+    await flagsApi.update(currentProject.key, currentFlag.key, { archived: willArchive });
+    toast('success', willArchive ? 'Flag archived' : 'Flag unarchived');
+    await fetchFlag(currentProject.key, currentFlag.key);
   };
 
   const handleDelete = async () => {
@@ -55,8 +128,18 @@ export default function FlagDetail() {
 
   if (loading || !currentFlag) return <div className="flex justify-center py-12"><Spinner size="lg" /></div>;
 
+  const isOn = envOn === true;
+
   return (
     <div>
+      {/* Archived banner */}
+      {currentFlag.archived && (
+        <div className="bg-amber-900/30 border border-amber-700/50 text-amber-300 rounded-lg px-4 py-3 text-sm mb-4 flex items-center gap-2">
+          <Archive className="h-4 w-4" />
+          This flag is archived. It will not be evaluated by SDKs.
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6">
         <button onClick={() => navigate('/flags')} className="text-sm text-slate-400 hover:text-white flex items-center gap-1 mb-4">
@@ -76,7 +159,35 @@ export default function FlagDetail() {
             {currentFlag.description && <p className="text-slate-400 mt-2">{currentFlag.description}</p>}
           </div>
           <div className="flex items-center gap-3">
-            <Toggle enabled={false} onChange={handleToggle} />
+            {/* Enhanced toggle with ON/OFF label */}
+            <div className="flex items-center gap-2">
+              {currentEnvironment && (
+                <span className="text-xs text-slate-500">{currentEnvironment.name}</span>
+              )}
+              <button
+                type="button"
+                disabled={toggling || envOn === null}
+                onClick={handleToggle}
+                className={clsx(
+                  'relative inline-flex h-8 w-16 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900',
+                  isOn ? 'bg-emerald-500' : 'bg-slate-600',
+                  (toggling || envOn === null) && 'opacity-50 cursor-not-allowed'
+                )}
+              >
+                <span
+                  className={clsx(
+                    'inline-block h-6 w-6 transform rounded-full bg-white transition-transform shadow-sm',
+                    isOn ? 'translate-x-9' : 'translate-x-1'
+                  )}
+                />
+                <span className={clsx(
+                  'absolute text-[10px] font-bold',
+                  isOn ? 'left-2 text-white' : 'right-2 text-slate-400'
+                )}>
+                  {isOn ? 'ON' : 'OFF'}
+                </span>
+              </button>
+            </div>
             <button onClick={handleArchive} className="btn-secondary flex items-center gap-1 text-sm">
               <Archive className="h-4 w-4" /> {currentFlag.archived ? 'Unarchive' : 'Archive'}
             </button>
@@ -103,9 +214,18 @@ export default function FlagDetail() {
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'Targeting' && (
+      {activeTab === 'Targeting' && currentProject && currentEnvironment && (
+        <TargetingEditor
+          projectKey={currentProject.key}
+          flagKey={currentFlag.key}
+          envKey={currentEnvironment.key}
+          variations={currentFlag.variations.map(v => ({ id: v.id, value: v.value, name: v.name || `Variation` }))}
+        />
+      )}
+
+      {activeTab === 'Targeting' && (!currentProject || !currentEnvironment) && (
         <div className="card p-6">
-          <p className="text-slate-400">Targeting rules will appear here.</p>
+          <p className="text-slate-400">Select a project and environment to configure targeting.</p>
         </div>
       )}
 
@@ -124,8 +244,68 @@ export default function FlagDetail() {
       )}
 
       {activeTab === 'Activity' && (
-        <div className="card p-6">
-          <p className="text-slate-400">Activity log will appear here.</p>
+        <div className="space-y-4">
+          {auditLoading && auditEntries.length === 0 && (
+            <div className="flex justify-center py-8"><Spinner size="md" /></div>
+          )}
+          {!auditLoading && auditEntries.length === 0 && (
+            <div className="card p-6 text-center">
+              <p className="text-slate-400">No activity recorded for this flag yet.</p>
+            </div>
+          )}
+          {auditEntries.length > 0 && (
+            <div className="relative">
+              {/* Timeline line */}
+              <div className="absolute left-5 top-0 bottom-0 w-px bg-slate-700" />
+              <div className="space-y-4">
+                {auditEntries.map((entry) => (
+                  <div key={entry.id} className="relative pl-12">
+                    {/* Timeline dot */}
+                    <div className="absolute left-[14px] top-4 w-3 h-3 rounded-full bg-indigo-500 border-2 border-slate-800 z-10" />
+                    <div className="card p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 text-sm">
+                            <User className="h-3.5 w-3.5 text-slate-400" />
+                            <span className="text-white font-medium">{entry.userName}</span>
+                          </div>
+                          <Badge variant={
+                            entry.action.includes('toggle') ? 'amber' :
+                            entry.action.includes('create') ? 'emerald' :
+                            entry.action.includes('delete') || entry.action.includes('archive') ? 'red' :
+                            'indigo'
+                          }>
+                            {entry.action}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-slate-500">
+                          <Clock className="h-3 w-3" />
+                          {new Date(entry.createdAt).toLocaleString()}
+                        </div>
+                      </div>
+                      {entry.comment && (
+                        <p className="text-sm text-slate-300 mb-2">{entry.comment}</p>
+                      )}
+                      {(entry.before || entry.after) && (
+                        <AuditDiff before={entry.before} after={entry.after} />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {auditEntries.length < auditTotal && (
+            <div className="flex justify-center pt-2">
+              <button
+                onClick={() => fetchAuditLog(auditOffset, true)}
+                disabled={auditLoading}
+                className="btn-secondary text-sm"
+              >
+                {auditLoading ? 'Loading...' : 'Load More'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

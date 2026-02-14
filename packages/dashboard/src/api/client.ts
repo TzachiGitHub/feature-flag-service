@@ -43,7 +43,12 @@ export const flagsApi = {
   create: (projectKey: string, data: any) => api.post(`/projects/${projectKey}/flags`, data),
   update: (projectKey: string, flagKey: string, data: any) => api.put(`/projects/${projectKey}/flags/${flagKey}`, data),
   delete: (projectKey: string, flagKey: string) => api.delete(`/projects/${projectKey}/flags/${flagKey}`),
-  toggle: (projectKey: string, flagKey: string, envKey: string) => api.post(`/projects/${projectKey}/flags/${flagKey}/environments/${envKey}/toggle`),
+  toggle: (projectKey: string, flagKey: string, envKey: string, on?: boolean) => api.post(`/projects/${projectKey}/flags/toggle`, { flagKey, environmentKey: envKey, on }),
   getTargeting: (projectKey: string, flagKey: string, envKey: string) => api.get(`/projects/${projectKey}/flags/${flagKey}/environments/${envKey}`),
   updateTargeting: (projectKey: string, flagKey: string, envKey: string, data: any) => api.patch(`/projects/${projectKey}/flags/${flagKey}/environments/${envKey}`, data),
+};
+
+export const auditLogApi = {
+  list: (projectKey: string, params?: { flagKey?: string; limit?: number; offset?: number }) =>
+    api.get(`/projects/${projectKey}/audit-log`, { params }),
 };

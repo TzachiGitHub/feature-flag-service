@@ -20,11 +20,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Placeholders for other agents
-function Placeholder({ name }: { name: string }) {
-  return <div className="card p-8 text-center text-slate-400">{name} — Coming soon</div>;
-}
-
 export default function App() {
   const loadFromStorage = useAuthStore((s) => s.loadFromStorage);
   useEffect(() => { loadFromStorage(); }, []);

@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search } from 'lucide-react';
 import { useFlagStore } from '../stores/flagStore';
 import { useProjectStore } from '../stores/projectStore';
-import Toggle from '../components/Toggle';
+import { flagsApi } from '../api/client';
 import Badge from '../components/Badge';
 import Spinner from '../components/Spinner';
 import EmptyState from '../components/EmptyState';
 import CreateFlagModal from '../components/CreateFlagModal';
+import { toast } from '../components/Toast';
 
 const typeBadgeVariant: Record<string, 'indigo' | 'emerald' | 'amber' | 'blue'> = {
   boolean: 'indigo',
@@ -18,18 +19,60 @@ const typeBadgeVariant: Record<string, 'indigo' | 'emerald' | 'amber' | 'blue'> 
 
 export default function FlagList() {
   const [createOpen, setCreateOpen] = useState(false);
-  const { flags, loading, filters, fetchFlags, toggleFlag, setFilter } = useFlagStore();
+  const { flags, loading, filters, fetchFlags, setFilter } = useFlagStore();
   const { currentProject, currentEnvironment } = useProjectStore();
   const navigate = useNavigate();
+  // Map of flagKey -> on/off state for current environment
+  const [envStates, setEnvStates] = useState<Record<string, boolean>>({});
+  const [togglingFlags, setTogglingFlags] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (currentProject) fetchFlags(currentProject.key);
   }, [currentProject?.key, filters.search, filters.type, filters.tag, filters.archived]);
 
+  // Fetch env on/off state for all flags
+  const fetchEnvStates = useCallback(async () => {
+    if (!currentProject || !currentEnvironment || flags.length === 0) return;
+    const states: Record<string, boolean> = {};
+    await Promise.allSettled(
+      flags.map(async (flag) => {
+        try {
+          const res = await flagsApi.getTargeting(currentProject.key, flag.key, currentEnvironment.key);
+          states[flag.key] = res.data.on ?? false;
+        } catch {
+          // ignore
+        }
+      })
+    );
+    setEnvStates(states);
+  }, [currentProject?.key, currentEnvironment?.key, flags]);
+
+  useEffect(() => {
+    fetchEnvStates();
+  }, [fetchEnvStates]);
+
   const handleToggle = async (e: React.MouseEvent, flagKey: string) => {
     e.stopPropagation();
-    if (currentProject && currentEnvironment) {
-      await toggleFlag(currentProject.key, flagKey, currentEnvironment.key);
+    if (!currentProject || !currentEnvironment) return;
+    const currentOn = envStates[flagKey] ?? false;
+    const newOn = !currentOn;
+
+    // Optimistic update
+    setEnvStates(prev => ({ ...prev, [flagKey]: newOn }));
+    setTogglingFlags(prev => new Set(prev).add(flagKey));
+
+    try {
+      await flagsApi.toggle(currentProject.key, flagKey, currentEnvironment.key, newOn);
+      toast('success', `${flagKey} ${newOn ? 'enabled' : 'disabled'}`);
+    } catch {
+      setEnvStates(prev => ({ ...prev, [flagKey]: currentOn }));
+      toast('error', 'Failed to toggle flag');
+    } finally {
+      setTogglingFlags(prev => {
+        const next = new Set(prev);
+        next.delete(flagKey);
+        return next;
+      });
     }
   };
 
@@ -78,31 +121,56 @@ export default function FlagList() {
 
       {!loading && flags.length > 0 && (
         <div className="space-y-2">
-          {flags.map((flag) => (
-            <div
-              key={flag.id}
-              onClick={() => navigate(`/flags/${flag.key}`)}
-              className="card px-5 py-4 flex items-center justify-between hover:bg-slate-750 hover:border-slate-600 cursor-pointer transition-colors group"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-3 mb-1">
-                  <span className="text-white font-medium group-hover:text-indigo-400 transition-colors">{flag.name}</span>
-                  <Badge variant={typeBadgeVariant[flag.type] || 'default'}>{flag.type}</Badge>
-                  {flag.archived && <Badge variant="red">archived</Badge>}
+          {flags.map((flag) => {
+            const isOn = envStates[flag.key] ?? false;
+            const isToggling = togglingFlags.has(flag.key);
+            return (
+              <div
+                key={flag.id}
+                onClick={() => navigate(`/flags/${flag.key}`)}
+                className="card px-5 py-4 flex items-center justify-between hover:bg-slate-750 hover:border-slate-600 cursor-pointer transition-colors group"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-3 mb-1">
+                    <span className="text-white font-medium group-hover:text-indigo-400 transition-colors">{flag.name}</span>
+                    <Badge variant={typeBadgeVariant[flag.type] || 'default'}>{flag.type}</Badge>
+                    {flag.archived && <Badge variant="red">archived</Badge>}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <code className="text-xs text-slate-500 font-mono">{flag.key}</code>
+                    {flag.tags?.map((tag) => (
+                      <Badge key={tag}>{tag}</Badge>
+                    ))}
+                    <span className="text-xs text-slate-600">{new Date(flag.updatedAt).toLocaleDateString()}</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <code className="text-xs text-slate-500 font-mono">{flag.key}</code>
-                  {flag.tags?.map((tag) => (
-                    <Badge key={tag}>{tag}</Badge>
-                  ))}
-                  <span className="text-xs text-slate-600">{new Date(flag.updatedAt).toLocaleDateString()}</span>
+                <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                  {/* ON/OFF Badge */}
+                  <span className={`text-xs font-bold px-2 py-1 rounded ${
+                    isOn ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-600/50 text-slate-400'
+                  }`}>
+                    {isOn ? 'ON' : 'OFF'}
+                  </span>
+                  {currentEnvironment && (
+                    <span className="text-[10px] text-slate-500">{currentEnvironment.name}</span>
+                  )}
+                  {/* Toggle */}
+                  <button
+                    type="button"
+                    disabled={isToggling}
+                    onClick={(e) => handleToggle(e, flag.key)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                      isOn ? 'bg-emerald-500' : 'bg-slate-600'
+                    } ${isToggling ? 'opacity-50' : ''}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      isOn ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
                 </div>
               </div>
-              <div onClick={(e) => handleToggle(e, flag.key)}>
-                <Toggle enabled={false} onChange={() => {}} />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
