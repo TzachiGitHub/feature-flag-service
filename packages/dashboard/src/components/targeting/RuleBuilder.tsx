@@ -2,13 +2,13 @@ import React from 'react';
 import { TargetingRule, Clause, Variation } from './types';
 import ClauseEditor from './ClauseEditor';
 import VariationPicker from './VariationPicker';
+import { GripVertical, Copy, Trash2 } from 'lucide-react';
 
 interface RuleBuilderProps {
   rules: TargetingRule[];
   variations: Variation[];
   segments?: Array<{ key: string; name: string }>;
   onChange: (rules: TargetingRule[]) => void;
-  /** If true, hide the serve section (for segment rules) */
   hideServe?: boolean;
 }
 
@@ -39,9 +39,29 @@ export default function RuleBuilder({ rules, variations, segments, onChange, hid
     onChange(copy);
   };
 
+  const duplicateRule = (idx: number) => {
+    const rule = rules[idx];
+    const dup: TargetingRule = {
+      ...JSON.parse(JSON.stringify(rule)),
+      id: generateId(),
+      description: rule.description ? `${rule.description} (copy)` : '',
+    };
+    const next = [...rules];
+    next.splice(idx + 1, 0, dup);
+    onChange(next);
+  };
+
   const addClause = (ruleIdx: number) => {
     const rule = rules[ruleIdx];
     updateRule(ruleIdx, { clauses: [...rule.clauses, newClause()] });
+  };
+
+  const duplicateClause = (ruleIdx: number, clauseIdx: number) => {
+    const rule = rules[ruleIdx];
+    const clause = { ...rule.clauses[clauseIdx], values: [...rule.clauses[clauseIdx].values] };
+    const clauses = [...rule.clauses];
+    clauses.splice(clauseIdx + 1, 0, clause);
+    updateRule(ruleIdx, { clauses });
   };
 
   const updateClause = (ruleIdx: number, clauseIdx: number, clause: Clause) => {
@@ -73,66 +93,102 @@ export default function RuleBuilder({ rules, variations, segments, onChange, hid
       )}
 
       {rules.map((rule, ruleIdx) => (
-        <div key={rule.id} className="bg-slate-800 border border-slate-700 rounded-lg p-4 space-y-3">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-mono text-slate-500">#{ruleIdx + 1}</span>
+        <div key={rule.id} className="relative">
+          {/* Connector line between rules */}
+          {ruleIdx > 0 && (
+            <div className="flex items-center justify-center -mt-1 -mb-1 py-1">
+              <div className="w-px h-4 bg-slate-700" />
+            </div>
+          )}
+          <div className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center gap-2 px-4 py-3 bg-slate-800/80 border-b border-slate-700">
+              {/* Drag handle */}
+              <div className="cursor-grab text-slate-600 hover:text-slate-400 active:cursor-grabbing" title="Drag to reorder">
+                <GripVertical size={16} />
+              </div>
+
+              {/* Rule number badge */}
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 text-xs font-bold">
+                {ruleIdx + 1}
+              </span>
+
               <input
                 value={rule.description}
                 onChange={(e) => updateRule(ruleIdx, { description: e.target.value })}
                 placeholder="Rule description..."
-                className="bg-transparent text-white text-sm placeholder-slate-500 outline-none border-b border-transparent focus:border-slate-600"
+                className="flex-1 bg-transparent text-white text-sm placeholder-slate-500 outline-none border-b border-transparent focus:border-slate-600"
               />
-            </div>
-            <div className="flex items-center gap-1">
-              <button onClick={() => moveRule(ruleIdx, -1)} disabled={ruleIdx === 0} className="text-slate-400 hover:text-white disabled:opacity-30 p-1" title="Move up">↑</button>
-              <button onClick={() => moveRule(ruleIdx, 1)} disabled={ruleIdx === rules.length - 1} className="text-slate-400 hover:text-white disabled:opacity-30 p-1" title="Move down">↓</button>
-              <button onClick={() => removeRule(ruleIdx)} className="text-slate-400 hover:text-red-400 p-1" title="Delete rule">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-            </div>
-          </div>
 
-          {/* Clauses */}
-          <div className="space-y-2">
-            <span className="text-xs text-slate-500 uppercase tracking-wider">IF (all match)</span>
-            {rule.clauses.map((clause, clauseIdx) => (
-              <React.Fragment key={clauseIdx}>
-                {clauseIdx > 0 && <div className="text-xs text-indigo-400 font-medium pl-2">AND</div>}
-                <ClauseEditor
-                  clause={clause}
-                  onChange={(c) => updateClause(ruleIdx, clauseIdx, c)}
-                  onRemove={() => removeClause(ruleIdx, clauseIdx)}
-                />
-              </React.Fragment>
-            ))}
-            <button
-              onClick={() => addClause(ruleIdx)}
-              className="text-xs text-slate-400 hover:text-slate-300"
-            >
-              + Add Clause
-            </button>
-          </div>
-
-          {/* Serve */}
-          {!hideServe && rule.serve && (
-            <div className="pt-2 border-t border-slate-700">
-              <span className="text-xs text-slate-500 uppercase tracking-wider">THEN SERVE</span>
-              <div className="mt-2">
-                <VariationPicker
-                  variations={variations}
-                  selectedId={rule.serve.variationId}
-                  onChange={(id) => updateRule(ruleIdx, { serve: { ...rule.serve, variationId: id, rollout: undefined } })}
-                  allowRollout
-                  rollout={rule.serve.rollout}
-                  onRolloutChange={(rollout) => updateRule(ruleIdx, { serve: { ...rule.serve, rollout, variationId: undefined } })}
-                />
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={() => moveRule(ruleIdx, -1)}
+                  disabled={ruleIdx === 0}
+                  className="text-slate-400 hover:text-white disabled:opacity-30 p-1 transition-colors"
+                  title="Move up"
+                >↑</button>
+                <button
+                  onClick={() => moveRule(ruleIdx, 1)}
+                  disabled={ruleIdx === rules.length - 1}
+                  className="text-slate-400 hover:text-white disabled:opacity-30 p-1 transition-colors"
+                  title="Move down"
+                >↓</button>
+                <button
+                  onClick={() => duplicateRule(ruleIdx)}
+                  className="text-slate-400 hover:text-indigo-400 p-1 transition-colors"
+                  title="Duplicate rule"
+                >
+                  <Copy size={14} />
+                </button>
+                <button
+                  onClick={() => removeRule(ruleIdx)}
+                  className="text-slate-400 hover:text-red-400 p-1 transition-colors"
+                  title="Delete rule"
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
             </div>
-          )}
+
+            {/* Clauses */}
+            <div className="px-4 py-3 space-y-2">
+              <span className="text-xs text-slate-500 uppercase tracking-wider">IF (all match)</span>
+              {rule.clauses.map((clause, clauseIdx) => (
+                <React.Fragment key={clauseIdx}>
+                  {clauseIdx > 0 && <div className="text-xs text-indigo-400 font-medium pl-2">AND</div>}
+                  <ClauseEditor
+                    clause={clause}
+                    onChange={(c) => updateClause(ruleIdx, clauseIdx, c)}
+                    onRemove={() => removeClause(ruleIdx, clauseIdx)}
+                    onDuplicate={() => duplicateClause(ruleIdx, clauseIdx)}
+                  />
+                </React.Fragment>
+              ))}
+              <button
+                onClick={() => addClause(ruleIdx)}
+                className="text-xs text-slate-400 hover:text-slate-300"
+              >
+                + Add Clause
+              </button>
+            </div>
+
+            {/* Serve */}
+            {!hideServe && rule.serve && (
+              <div className="px-4 py-3 border-t border-slate-700 bg-slate-800/50">
+                <span className="text-xs text-slate-500 uppercase tracking-wider">THEN SERVE</span>
+                <div className="mt-2">
+                  <VariationPicker
+                    variations={variations}
+                    selectedId={rule.serve.variationId}
+                    onChange={(id) => updateRule(ruleIdx, { serve: { ...rule.serve, variationId: id, rollout: undefined } })}
+                    allowRollout
+                    rollout={rule.serve.rollout}
+                    onRolloutChange={(rollout) => updateRule(ruleIdx, { serve: { ...rule.serve, rollout, variationId: undefined } })}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       ))}
     </div>

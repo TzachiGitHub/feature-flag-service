@@ -5,6 +5,9 @@ import IndividualTargets from './IndividualTargets';
 import RuleBuilder from './RuleBuilder';
 import VariationPicker from './VariationPicker';
 import PrerequisiteSelector from './PrerequisiteSelector';
+import AnimatedToggle from '../AnimatedToggle';
+import ConfirmDialog from '../ConfirmDialog';
+import { toast } from '../Toast';
 
 interface TargetingEditorProps {
   projectKey: string;
@@ -28,8 +31,29 @@ export default function TargetingEditor({ projectKey, flagKey, envKey, variation
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showReview, setShowReview] = useState(false);
+  const [saveComment, setSaveComment] = useState('');
 
   const hasChanges = JSON.stringify(config) !== JSON.stringify(savedConfig);
+
+  const changeCount = (() => {
+    let count = 0;
+    if (config.on !== savedConfig.on) count++;
+    if (config.offVariation !== savedConfig.offVariation) count++;
+    if (JSON.stringify(config.targets) !== JSON.stringify(savedConfig.targets)) count++;
+    if (JSON.stringify(config.rules) !== JSON.stringify(savedConfig.rules)) count++;
+    if (JSON.stringify(config.fallthrough) !== JSON.stringify(savedConfig.fallthrough)) count++;
+    if (JSON.stringify(config.prerequisites) !== JSON.stringify(savedConfig.prerequisites)) count++;
+    return count;
+  })();
+
+  // Warn on page unload if unsaved changes
+  useEffect(() => {
+    if (!hasChanges) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hasChanges]);
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -59,15 +83,18 @@ export default function TargetingEditor({ projectKey, flagKey, envKey, variation
     try {
       setSaving(true);
       setError(null);
-      // Map offVariation → offVariationId for the server
       const payload = {
         ...config,
         offVariationId: config.offVariation,
         rules: config.rules.map((r: any) => ({ ...r, variationId: r.serve?.variationId, serve: undefined })),
+        comment: saveComment || undefined,
       };
       delete (payload as any).offVariation;
       await apiClient.patch(`/projects/${projectKey}/flags/${flagKey}/environments/${envKey}`, payload);
       setSavedConfig({ ...config });
+      setShowReview(false);
+      setSaveComment('');
+      toast('success', 'Targeting saved');
     } catch (err: any) {
       setError(err.message || 'Failed to save');
     } finally {
@@ -78,7 +105,14 @@ export default function TargetingEditor({ projectKey, flagKey, envKey, variation
   const discard = () => setConfig({ ...savedConfig });
 
   if (loading) {
-    return <div className="text-slate-400 text-center py-8">Loading targeting configuration...</div>;
+    return (
+      <div className="space-y-4">
+        <div className="h-16 bg-slate-800 rounded-lg animate-pulse" />
+        <div className="h-24 bg-slate-800 rounded-lg animate-pulse" />
+        <div className="h-32 bg-slate-800 rounded-lg animate-pulse" />
+        <div className="h-24 bg-slate-800 rounded-lg animate-pulse" />
+      </div>
+    );
   }
 
   return (
@@ -87,8 +121,38 @@ export default function TargetingEditor({ projectKey, flagKey, envKey, variation
         <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm">{error}</div>
       )}
 
+      {/* Visual Pipeline */}
+      <div className="flex items-center gap-0 text-xs overflow-x-auto pb-2">
+        {[
+          { label: 'OFF Variation', active: true },
+          { label: 'Prerequisites', active: config.prerequisites.length > 0 },
+          { label: 'Individual Targets', active: config.targets.length > 0 },
+          { label: 'Rules', active: config.rules.length > 0 },
+          { label: 'Default Rule', active: true },
+        ].map((stage, i, arr) => (
+          <React.Fragment key={stage.label}>
+            <div className={`px-3 py-1.5 rounded-md border whitespace-nowrap transition-colors ${
+              stage.active
+                ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400'
+                : 'bg-slate-800 border-slate-700 text-slate-600'
+            }`}>
+              {stage.label}
+            </div>
+            {i < arr.length - 1 && (
+              <svg className="w-4 h-4 text-slate-600 shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.5" fill="none" />
+              </svg>
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+
       {/* Targeting Toggle */}
-      <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 flex items-center justify-between">
+      <div className={`border rounded-lg p-4 flex items-center justify-between transition-colors ${
+        config.on
+          ? 'bg-emerald-500/5 border-emerald-500/30'
+          : 'bg-slate-800 border-slate-700'
+      }`}>
         <div>
           <h3 className="text-white font-medium">
             Targeting is {config.on ? (
@@ -103,16 +167,11 @@ export default function TargetingEditor({ projectKey, flagKey, envKey, variation
               : 'All users will receive the off variation.'}
           </p>
         </div>
-        <button
-          onClick={() => setConfig({ ...config, on: !config.on })}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-            config.on ? 'bg-emerald-500' : 'bg-slate-600'
-          }`}
-        >
-          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-            config.on ? 'translate-x-6' : 'translate-x-1'
-          }`} />
-        </button>
+        <AnimatedToggle
+          enabled={config.on}
+          onChange={(on) => setConfig({ ...config, on })}
+          size="md"
+        />
       </div>
 
       {/* Off Variation */}
@@ -173,24 +232,98 @@ export default function TargetingEditor({ projectKey, flagKey, envKey, variation
         />
       </div>
 
-      {/* Actions */}
+      {/* Sticky Save Bar */}
       {hasChanges && (
-        <div className="flex gap-3 sticky bottom-4">
-          <button
-            onClick={save}
-            disabled={saving}
-            className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 px-4 rounded-lg transition-colors disabled:opacity-50"
-          >
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
-          <button
-            onClick={discard}
-            className="bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium py-2.5 px-4 rounded-lg transition-colors"
-          >
-            Discard
-          </button>
+        <div
+          className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-sm border-t border-slate-700"
+          style={{ animation: 'stickySlideUp 300ms cubic-bezier(0.34, 1.56, 0.64, 1)' }}
+        >
+          <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
+            <span className="text-sm text-amber-400 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              {changeCount} unsaved change{changeCount !== 1 ? 's' : ''}
+            </span>
+            <div className="flex gap-2">
+              <button onClick={discard} className="btn-secondary text-sm">
+                Discard
+              </button>
+              <button
+                onClick={() => setShowReview(true)}
+                className="btn-primary text-sm"
+              >
+                Review & Save
+              </button>
+            </div>
+          </div>
         </div>
       )}
+
+      {/* Review Modal */}
+      {showReview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowReview(false)}>
+          <div className="card p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-white mb-4">Review Changes</h2>
+
+            {/* Diff */}
+            <div className="space-y-3 mb-4">
+              {config.on !== savedConfig.on && (
+                <DiffItem label="Targeting" before={savedConfig.on ? 'ON' : 'OFF'} after={config.on ? 'ON' : 'OFF'} />
+              )}
+              {config.offVariation !== savedConfig.offVariation && (
+                <DiffItem label="Off Variation" before={savedConfig.offVariation || 'none'} after={config.offVariation || 'none'} />
+              )}
+              {JSON.stringify(config.targets) !== JSON.stringify(savedConfig.targets) && (
+                <DiffItem label="Individual Targets" before={`${savedConfig.targets.length} targets`} after={`${config.targets.length} targets`} />
+              )}
+              {JSON.stringify(config.rules) !== JSON.stringify(savedConfig.rules) && (
+                <DiffItem label="Rules" before={`${savedConfig.rules.length} rules`} after={`${config.rules.length} rules`} />
+              )}
+              {JSON.stringify(config.fallthrough) !== JSON.stringify(savedConfig.fallthrough) && (
+                <DiffItem label="Default Rule" before="changed" after="updated" />
+              )}
+            </div>
+
+            {/* Comment */}
+            <div className="mb-4">
+              <label className="block text-sm text-slate-300 mb-1">Comment (optional)</label>
+              <textarea
+                value={saveComment}
+                onChange={(e) => setSaveComment(e.target.value)}
+                className="input-field text-sm"
+                rows={2}
+                placeholder="Describe the changes..."
+              />
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowReview(false)} className="btn-secondary">Cancel</button>
+              <button onClick={save} disabled={saving} className="btn-primary">
+                {saving ? 'Saving...' : 'Confirm & Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes stickySlideUp {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function DiffItem({ label, before, after }: { label: string; before: string; after: string }) {
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
+      <div className="text-xs font-medium text-slate-400 mb-1">{label}</div>
+      <div className="flex items-center gap-2 text-sm">
+        <span className="text-red-400 line-through">{before}</span>
+        <span className="text-slate-500">→</span>
+        <span className="text-emerald-400">{after}</span>
+      </div>
     </div>
   );
 }
