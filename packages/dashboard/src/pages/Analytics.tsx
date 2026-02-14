@@ -21,10 +21,7 @@ interface Breakdown {
 }
 
 interface StaleFlag {
-  name: string;
   key: string;
-  lastEvaluated: string;
-  daysStale: number;
 }
 
 function formatNumber(n: number): string {
@@ -172,7 +169,10 @@ export default function Analytics() {
   useEffect(() => {
     if (!projectKey) return;
     api.get(`/projects/${projectKey}/analytics/stale-flags`, { params: { days: 7 } })
-      .then(r => setStaleFlags(r.data?.flags || []))
+      .then(r => {
+        const raw = r.data?.staleFlags || [];
+        setStaleFlags(raw.map((f: any) => typeof f === 'string' ? { key: f } : f));
+      })
       .catch(() => setStaleFlags([]));
   }, [projectKey]);
 
@@ -203,7 +203,7 @@ export default function Analytics() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: 'Total Evaluations', value: data?.totalEvaluations ?? 0, trend: data?.trend },
           { label: 'Unique Contexts', value: data?.uniqueContexts ?? 0 },
@@ -247,30 +247,14 @@ export default function Analytics() {
         {staleFlags.length === 0 ? (
           <div className="text-slate-500 text-sm">No stale flags detected 🎉</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-slate-400 border-b border-slate-700">
-                <th className="pb-2 font-medium">Flag</th>
-                <th className="pb-2 font-medium">Key</th>
-                <th className="pb-2 font-medium">Last Evaluated</th>
-                <th className="pb-2 font-medium">Days Stale</th>
-              </tr>
-            </thead>
-            <tbody>
-              {staleFlags.map(f => (
-                <tr key={f.key} className="border-b border-slate-700/50 hover:bg-slate-750">
-                  <td className="py-2.5 text-slate-300">{f.name}</td>
-                  <td className="py-2.5"><code className="text-indigo-400 text-xs bg-slate-900 px-1.5 py-0.5 rounded">{f.key}</code></td>
-                  <td className="py-2.5 text-slate-400">{f.lastEvaluated ? new Date(f.lastEvaluated).toLocaleDateString() : 'Never'}</td>
-                  <td className="py-2.5">
-                    <span className={`inline-flex items-center gap-1 ${f.daysStale >= 30 ? 'text-red-400' : 'text-amber-400'}`}>
-                      {f.daysStale >= 30 && '⚠️'} {f.daysStale}d
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="space-y-2">
+            {staleFlags.map(f => (
+              <div key={f.key} className="flex items-center justify-between bg-slate-900 rounded-lg px-4 py-3 border border-slate-700/50">
+                <code className="text-indigo-400 text-sm bg-slate-950 px-2 py-0.5 rounded font-mono">{f.key}</code>
+                <span className="text-xs text-amber-400">No evaluations in 7+ days</span>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>

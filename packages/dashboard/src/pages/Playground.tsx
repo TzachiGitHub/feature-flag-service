@@ -53,7 +53,7 @@ export default function Playground() {
     try {
       const context = JSON.parse(contextStr);
       setLoading(true);
-      const r = await api.post(`/projects/${projectKey}/evaluate`, { context });
+      const r = await api.post(`/projects/${projectKey}/flags/evaluate`, { context });
       setResults(r.data?.results || r.data || []);
     } catch (e: any) {
       if (e instanceof SyntaxError) {
@@ -76,7 +76,7 @@ export default function Playground() {
     <div className="p-6 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold text-white mb-6">Playground</h1>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: Context Editor */}
         <div className="space-y-4">
           <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
