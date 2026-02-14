@@ -21,7 +21,7 @@ export default function PrerequisiteSelector({ prerequisites, currentFlagKey, pr
 
   useEffect(() => {
     setLoading(true);
-    apiClient.get(`/api/projects/${projectKey}/flags`)
+    apiClient.get(`/projects/${projectKey}/flags`)
       .then((res: any) => {
         const items = (res.data?.items || res.data || []) as FlagSummary[];
         setFlags(items.filter((f: FlagSummary) => f.key !== currentFlagKey));

@@ -21,7 +21,7 @@ export default function SegmentDetail() {
   const hasChanges = JSON.stringify(segment) !== JSON.stringify(saved);
 
   useEffect(() => {
-    apiClient.get(`/api/projects/${projectKey}/segments/${segmentKey}`)
+    apiClient.get(`/projects/${projectKey}/segments/${segmentKey}`)
       .then((res: any) => {
         const data = res.data || res;
         setSegment(data);
@@ -36,7 +36,7 @@ export default function SegmentDetail() {
     setSaving(true);
     setError(null);
     try {
-      await apiClient.put(`/api/projects/${projectKey}/segments/${segmentKey}`, segment);
+      await apiClient.put(`/projects/${projectKey}/segments/${segmentKey}`, segment);
       setSaved({ ...segment });
     } catch (err: any) {
       setError(err.message || 'Failed to save');
@@ -48,7 +48,7 @@ export default function SegmentDetail() {
   const deleteSegment = async () => {
     if (!confirm('Delete this segment? This cannot be undone.')) return;
     try {
-      await apiClient.delete(`/api/projects/${projectKey}/segments/${segmentKey}`);
+      await apiClient.delete(`/projects/${projectKey}/segments/${segmentKey}`);
       navigate('/segments');
     } catch (err: any) {
       setError(err.message || 'Failed to delete');

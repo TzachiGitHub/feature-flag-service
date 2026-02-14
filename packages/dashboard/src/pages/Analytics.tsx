@@ -151,7 +151,7 @@ export default function Analytics() {
     setLoading(true);
     const params: any = { period };
     if (flagFilter) params.flagKey = flagFilter;
-    api.get(`/api/projects/${projectKey}/analytics/evaluations`, { params })
+    api.get(`/projects/${projectKey}/analytics/evaluations`, { params })
       .then(r => setData(r.data))
       .catch(() => setData({ totalEvaluations: 0, uniqueContexts: 0, activeFlags: 0, buckets: [] }))
       .finally(() => setLoading(false));
@@ -159,7 +159,7 @@ export default function Analytics() {
 
   useEffect(() => {
     if (flagFilter) {
-      api.get(`/api/projects/${projectKey}/analytics/evaluations/${flagFilter}/breakdown`)
+      api.get(`/projects/${projectKey}/analytics/evaluations/${flagFilter}/breakdown`)
         .then(r => setBreakdown(r.data))
         .catch(() => setBreakdown(null));
     } else {
@@ -168,7 +168,7 @@ export default function Analytics() {
   }, [flagFilter]);
 
   useEffect(() => {
-    api.get(`/api/projects/${projectKey}/analytics/stale-flags`, { params: { days: 7 } })
+    api.get(`/projects/${projectKey}/analytics/stale-flags`, { params: { days: 7 } })
       .then(r => setStaleFlags(r.data?.flags || []))
       .catch(() => setStaleFlags([]));
   }, []);

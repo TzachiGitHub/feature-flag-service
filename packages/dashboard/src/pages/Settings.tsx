@@ -54,7 +54,7 @@ export default function Settings() {
   const projectName = currentProject?.name ?? 'My Project';
 
   useEffect(() => {
-    api.get(`/api/projects/${projectKey}/environments`)
+    api.get(`/projects/${projectKey}/environments`)
       .then(r => setEnvs(r.data?.environments || r.data || []))
       .catch(() => setEnvs([
         { key: 'production', name: 'Production', color: '#f43f5e', sdkKey: 'sdk-prod-abc123xyz' },
@@ -78,7 +78,7 @@ export default function Settings() {
 
   const handleRotateKey = async (envKey: string) => {
     try {
-      const res = await api.post(`/api/projects/${projectKey}/environments/${envKey}/rotate-key`);
+      const res = await api.post(`/projects/${projectKey}/environments/${envKey}/rotate-key`);
       const newKey = res.data?.sdkKey;
       if (newKey) {
         setEnvs(prev => prev.map(e => e.key === envKey ? { ...e, sdkKey: newKey } : e));
@@ -93,7 +93,7 @@ export default function Settings() {
   const handleDeleteProject = async () => {
     if (deleteInput !== projectName) return;
     try {
-      await api.delete(`/api/projects/${projectKey}`);
+      await api.delete(`/projects/${projectKey}`);
       toast('success', 'Project deleted');
       await fetchProjects();
       window.location.href = '/';

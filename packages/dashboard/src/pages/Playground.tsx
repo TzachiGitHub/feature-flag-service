@@ -50,7 +50,7 @@ export default function Playground() {
     try {
       const context = JSON.parse(contextStr);
       setLoading(true);
-      const r = await api.post(`/api/projects/${projectKey}/evaluate`, { context });
+      const r = await api.post(`/projects/${projectKey}/evaluate`, { context });
       setResults(r.data?.results || r.data || []);
     } catch (e: any) {
       if (e instanceof SyntaxError) {

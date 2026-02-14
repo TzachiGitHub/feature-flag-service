@@ -62,7 +62,7 @@ export default function AuditLog() {
     if (fromDate) params.from = fromDate;
     if (toDate) params.to = toDate;
 
-    api.get(`/api/projects/${projectKey}/audit-log`, { params })
+    api.get(`/projects/${projectKey}/audit-log`, { params })
       .then(r => {
         const items = r.data?.entries || r.data || [];
         if (reset) {

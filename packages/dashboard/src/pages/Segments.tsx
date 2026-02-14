@@ -16,7 +16,7 @@ export default function Segments() {
   const projectKey = currentProject?.key ?? '';
 
   useEffect(() => {
-    apiClient.get(`/api/projects/${projectKey}/segments`)
+    apiClient.get(`/projects/${projectKey}/segments`)
       .then((res: any) => setSegments(res.data?.items || res.data || []))
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -25,7 +25,7 @@ export default function Segments() {
   const createSegment = async () => {
     if (!newName || !newKey) return;
     try {
-      await apiClient.post(`/api/projects/${projectKey}/segments`, {
+      await apiClient.post(`/projects/${projectKey}/segments`, {
         name: newName,
         key: newKey,
         description: newDesc,
@@ -36,7 +36,7 @@ export default function Segments() {
       setShowCreate(false);
       setNewName(''); setNewKey(''); setNewDesc('');
       // Refresh
-      const res = await apiClient.get(`/api/projects/${projectKey}/segments`);
+      const res = await apiClient.get(`/projects/${projectKey}/segments`);
       setSegments(res.data?.items || res.data || []);
     } catch {}
   };

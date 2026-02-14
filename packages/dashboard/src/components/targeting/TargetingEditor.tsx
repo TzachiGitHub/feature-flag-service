@@ -34,7 +34,7 @@ export default function TargetingEditor({ projectKey, flagKey, envKey, variation
   const fetchConfig = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await apiClient.get(`/api/projects/${projectKey}/flags/${flagKey}/environments/${envKey}`);
+      const res = await apiClient.get(`/projects/${projectKey}/flags/${flagKey}/environments/${envKey}`);
       const data = res.data || res;
       const loaded: TargetingConfig = {
         on: data.on ?? false,
@@ -59,7 +59,7 @@ export default function TargetingEditor({ projectKey, flagKey, envKey, variation
     try {
       setSaving(true);
       setError(null);
-      await apiClient.patch(`/api/projects/${projectKey}/flags/${flagKey}/environments/${envKey}`, config);
+      await apiClient.patch(`/projects/${projectKey}/flags/${flagKey}/environments/${envKey}`, config);
       setSavedConfig({ ...config });
     } catch (err: any) {
       setError(err.message || 'Failed to save');
