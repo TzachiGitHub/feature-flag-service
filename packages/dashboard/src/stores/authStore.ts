@@ -12,10 +12,24 @@ interface AuthState {
   loadFromStorage: () => void;
 }
 
+function getInitialAuth(): { token: string | null; user: User | null; isAuthenticated: boolean } {
+  try {
+    const token = localStorage.getItem('token');
+    const userStr = localStorage.getItem('user');
+    if (token && userStr) {
+      const user = JSON.parse(userStr);
+      return { token, user, isAuthenticated: true };
+    }
+  } catch { /* ignore */ }
+  return { token: null, user: null, isAuthenticated: false };
+}
+
+const initial = getInitialAuth();
+
 export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  token: null,
-  isAuthenticated: false,
+  user: initial.user,
+  token: initial.token,
+  isAuthenticated: initial.isAuthenticated,
 
   login: async (email, password) => {
     const res = await authApi.login(email, password);
