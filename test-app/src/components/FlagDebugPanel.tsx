@@ -6,11 +6,26 @@ const reasonColors: Record<string, string> = {
   TARGET_MATCH: 'text-blue-400',
   RULE_MATCH: 'text-purple-400',
   FALLTHROUGH: 'text-green-400',
+  ROLLOUT: 'text-orange-400',
   ERROR: 'text-red-400',
   UNKNOWN: 'text-gray-500',
   FLAG_NOT_FOUND: 'text-yellow-400',
   NOT_READY: 'text-yellow-400',
 };
+
+function FlagValue({ value }: { value: unknown }) {
+  if (typeof value === 'object' && value !== null) {
+    return (
+      <pre className="text-yellow-300 whitespace-pre-wrap text-xs m-0 bg-gray-800 rounded p-2 overflow-x-auto">
+        {JSON.stringify(value, null, 2)}
+      </pre>
+    );
+  }
+  if (typeof value === 'boolean') {
+    return <span className={`font-bold ${value ? 'text-green-400' : 'text-red-400'}`}>{String(value)}</span>;
+  }
+  return <span className="text-cyan-300">{JSON.stringify(value)}</span>;
+}
 
 export function FlagDebugPanel() {
   const { flagDetails, ready, refresh } = useFlagContext();
@@ -44,35 +59,27 @@ export function FlagDebugPanel() {
           ) : entries.length === 0 ? (
             <p className="text-gray-500 text-sm py-2">No flags received. Check SDK key and API connection.</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-gray-500 text-xs uppercase border-b border-gray-700">
-                  <th className="text-left py-2 pr-4">Flag Key</th>
-                  <th className="text-left py-2 pr-4">Value</th>
-                  <th className="text-left py-2 pr-4">Variation ID</th>
-                  <th className="text-left py-2">Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map(([key, detail]) => (
-                  <tr key={key} className="border-b border-gray-800 last:border-0">
-                    <td className="py-2 pr-4 font-mono text-indigo-400">{key}</td>
-                    <td className="py-2 pr-4 font-mono max-w-xs" style={{ wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
-                      {typeof detail.value === 'object'
-                        ? <pre className="text-yellow-300 whitespace-pre-wrap text-xs m-0">{JSON.stringify(detail.value, null, 2)}</pre>
-                        : typeof detail.value === 'boolean'
-                        ? <span className={detail.value ? 'text-green-400' : 'text-red-400'}>{String(detail.value)}</span>
-                        : <span className="text-cyan-300">{JSON.stringify(detail.value)}</span>
-                      }
-                    </td>
-                    <td className="py-2 pr-4 text-gray-500 font-mono text-xs">{detail.variationId || '—'}</td>
-                    <td className={`py-2 font-medium text-xs ${reasonColors[detail.reason] || 'text-gray-400'}`}>
+            <div className="space-y-3">
+              {entries.map(([key, detail]) => (
+                <div key={key} className="bg-gray-800 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-mono text-indigo-400 font-semibold text-sm">{key}</span>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded ${reasonColors[detail.reason] || 'text-gray-400'} bg-gray-700`}>
                       {detail.reason}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </span>
+                  </div>
+                  <div className="mb-1">
+                    <span className="text-xs text-gray-500 mr-2">Value:</span>
+                    <FlagValue value={detail.value} />
+                  </div>
+                  {detail.variationId && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Variation: <span className="font-mono text-gray-400">{detail.variationId}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
