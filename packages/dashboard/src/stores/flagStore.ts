@@ -36,7 +36,8 @@ export const useFlagStore = create<FlagState>((set, get) => ({
       if (filters.type) params.type = filters.type;
       if (filters.archived) params.archived = true;
       const res = await flagsApi.list(projectKey, params);
-      set({ flags: res.data.data || res.data || [] });
+      const raw = res.data;
+      set({ flags: raw.flags || raw.data || (Array.isArray(raw) ? raw : []) });
     } finally {
       set({ loading: false });
     }
